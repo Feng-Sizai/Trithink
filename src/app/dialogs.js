@@ -2,6 +2,8 @@
  * Built in the shared private application scope; see build.config.cjs.
  */
 function render() {
+  cancelScheduleGesture();
+  closeScheduleMenu();
   if (!destroyEditor()) return;
   C.syncAutoProjects(model, today);
   cleanPlans();
@@ -36,15 +38,14 @@ function closeModal() {
   modalContext = null;
 }
 function priorityOptions(value, inherit = false) {
-  return (inherit ? `<option value="" ${value == null ? 'selected' : ''}>沿用上一级</option>` : '') + [3, 2, 1].map(n => `<option value="${n}" ${Number(value) === n ? 'selected' : ''}>${'★'.repeat(n)}：${urgencyLabels[n - 1]}</option>`).join('');
+  return (inherit ? `<option value="" ${value == null ? 'selected' : ''}>沿用上一级</option>` : '') + [3, 2, 1, 0].map(n => `<option value="${n}" ${value != null && value !== '' && Number(value) === n ? 'selected' : ''}>${n ? '★'.repeat(n) + '：' : ''}${priorityLabels[n]}</option>`).join('');
 }
 function editForm(kind, id) {
   let item, title, context;
   if (kind === 'project') {
     item = id ? projectById(id) : {
       title: '',
-      priority: 2,
-      importance: 2
+      priority: 1
     };
     title = id ? '编辑项目' : '新建项目';
     context = {
@@ -80,8 +81,8 @@ function editForm(kind, id) {
       stageId: g ? g.stage.id : modalContext?.stageId
     };
   }
-  const deadlineField = `<label class="field">截止时间<input type="date" name="due" value="${item.due || ''}"><span class="muted small">${kind === 'project' ? '可以暂不设置，下级默认沿用' : '留空则沿用上一级截止时间'}</span></label>`;
-  const fields = `<div class="form-grid"><label class="field wide">${kind === 'project' ? '项目标题' : kind === 'stage' ? '子阶段名称' : '小任务名称'}<input name="title" value="${esc(item.title)}" maxlength="200" required autocomplete="off"></label><label class="field">紧急程度<select name="priority">${priorityOptions(item.priority, kind !== 'project')}</select></label>${kind === 'project' ? `<label class="field">重要程度<select name="importance">${[3, 2, 1].map(n => `<option value="${n}" ${item.importance === n ? 'selected' : ''}>${labels[n - 1]}</option>`).join('')}</select></label>${deadlineField}` : deadlineField}</div>${id ? `<button type="button" class="danger text-button" data-action="delete-item" data-kind="${kind}" data-id="${id}">删除${kind === 'project' ? '项目' : kind === 'stage' ? '子阶段' : '小任务'}</button>` : ''}`;
+  const deadlineField = `<fieldset class="deadline-fields field wide"><legend>截止时间</legend><div class="deadline-inputs"><input aria-label="截止日期（选填）" type="date" name="due" value="${item.due || ''}"><input aria-label="截止时刻（选填）" type="time" name="dueTime" value="${item.dueTime || ''}"></div><span class="muted small">${kind === 'project' ? '日期可不填；' : '日期留空沿用上一级；'}时刻留空默认为当天 24:00，默认时刻不显示</span></fieldset>`;
+  const fields = `<div class="form-grid"><label class="field wide">${kind === 'project' ? '项目标题' : kind === 'stage' ? '子阶段名称' : '小任务名称'}<input name="title" value="${esc(item.title)}" maxlength="200" required autocomplete="off"></label><label class="field">重要程度<select name="priority">${priorityOptions(item.priority, kind !== 'project')}</select></label>${deadlineField}</div>${id ? `<button type="button" class="danger text-button" data-action="delete-item" data-kind="${kind}" data-id="${id}">删除${kind === 'project' ? '项目' : kind === 'stage' ? '子阶段' : '小任务'}</button>` : ''}`;
   openModal(title, fields, 'save-item', context);
 }
 function addTask(stageId) {
@@ -96,7 +97,7 @@ function confirmDelete(kind, id) {
   if (kind === 'project') title = projectById(id)?.title;
   if (kind === 'stage') title = stageById(id)?.stage.title;
   if (kind === 'task') title = recordById(id)?.record.title;
-  openModal('确认删除', `<p>删除“${esc(title)}”${kind === 'task' ? '' : '及其下的全部内容'}？</p><p class="muted small">建议先在“数据与备份”中导出备份。删除后无法在界面中撤销。</p>`, 'delete-item', {
+  openModal('确认删除', `<p>删除“${esc(title)}”${kind === 'task' ? '' : '及其下的全部内容'}？</p><p class="muted small">建议先在“数据与备份”中导出备份。本次打开期间可按 Ctrl+Z 撤销。</p>`, 'delete-item', {
     kind,
     id
   });
@@ -125,8 +126,8 @@ function complete(id, value) {
 }
 function showData() {
   if (!captureNotebook()) return;
-  save();
-  openModal('数据与备份', `<p>本程序离线运行，数据保存在当前浏览器。导出备份可用于迁移到其他电脑或后续版本。</p><p class="muted small">存储状态：${memoryOnly ? '仅在本次打开期间保留，请先导出备份。' : '本机保存可用。'}</p><div class="actions"><button type="button" class="primary" data-action="export-data">导出备份</button><button type="button" class="secondary" data-action="choose-import">导入备份</button><input id="backup-file" type="file" accept="application/json,.json" hidden></div><p class="muted small">备份包含你的项目、计划、作息及速写内容；请保管好备份文件。</p>`, 'close-data');
+  save(undefined, { recordUndo: Boolean(editor) });
+  openModal('数据与备份', `<p>${window.ThreeThingsDesktop ? '本程序离线运行，每次保存会写入本机数据文件并保留最近 100 份不同内容的自动备份。重新打开时自动读取；文件损坏时尝试恢复备份。' : '本程序离线运行，数据保存在当前浏览器。'}导出备份可用于迁移到其他电脑或后续版本。</p><p class="muted small">存储状态：${memoryOnly ? '仅在本次打开期间保留，请先导出备份。' : '本机保存可用。'}</p><div class="actions"><button type="button" class="primary" data-action="export-data">导出备份</button><button type="button" class="secondary" data-action="choose-import">导入备份</button><input id="backup-file" type="file" accept="application/json,.json" hidden></div><p class="muted small">备份包含你的项目、计划、作息及速写内容；请保管好备份文件。</p>`, 'close-data');
 }
 function downloadBackup() {
   try {

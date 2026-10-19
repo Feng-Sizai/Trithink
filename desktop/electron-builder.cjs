@@ -14,6 +14,9 @@ module.exports = {
   },
   files: [
     'main.cjs',
+    'preload.cjs',
+    'local-backup.cjs',
+    'app/core.cjs',
     'package.json',
     'app/index.html',
     'assets/icon.ico',

@@ -29,7 +29,7 @@ test('model validation preserves selected work and inheritance after a round tri
   });
   assert.equal(Core.getPlan(model, '2026-10-17').selected.length, 3);
 });
-test('priority wins before importance, which wins before deadline', () => {
+test('priority wins before deadline and legacy importance is ignored', () => {
   const records = [{
     id: 'urgent',
     priority: 3,
@@ -57,7 +57,7 @@ test('priority wins before importance, which wins before deadline', () => {
     due: null
   }];
   const shuffled = [records[4], records[3], records[2], records[1], records[0]];
-  assert.deepEqual(Core.sortTasks(shuffled).map(task => task.id), records.map(task => task.id));
+  assert.deepEqual(Core.sortTasks(shuffled).map(task => task.id), ['urgent', 'earlier', 'later', 'important', 'noDate']);
   assert.equal(shuffled[0].id, 'noDate');
 });
 test('undated work sorts after every valid date, including the final supported date', () => {
@@ -253,6 +253,7 @@ test('a project without stages is an executable leaf with its own completion sta
     priority: 3,
     importance: 3,
     due: null,
+    dueTime: null,
     done: false,
     completedAt: null,
     isProject: true,
@@ -282,11 +283,11 @@ test('automatic projects compete with manually selected tasks by normal priority
   model.projects.push(emptyProject('p_first', 3, 3), emptyProject('p_later', 1, 1));
   const plan = Core.syncAutoProjects(model, '2026-10-17');
   assert.deepEqual(plan.selected, ['t_exercises', 't_derivative', 's_proposal', 'p_first', 'p_later']);
-  assert.deepEqual(plan.visible, ['t_exercises', 'p_first', 't_derivative']);
+  assert.deepEqual(plan.visible, ['t_exercises', 'p_first', 's_proposal']);
   Core.syncAutoProjects(model, '2026-10-17');
   assert.equal(plan.selected.filter(id => id === 'p_first').length, 1);
 });
-test('automatic empty projects use stars before importance and deadlines against selected tasks', () => {
+test('automatic empty projects use stars then deadlines against selected tasks', () => {
   const model = Core.blankModel();
   model.projects = [{
     id: 'p_manual',

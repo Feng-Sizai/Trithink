@@ -17,6 +17,7 @@ function prepareDesktop() {
     recursive: true
   });
   fs.copyFileSync(built.file, target);
+  fs.copyFileSync(path.join(projectRoot, 'src', 'core.js'), path.join(path.dirname(target), 'core.cjs'));
   return target;
 }
 module.exports = {

@@ -59,7 +59,10 @@ async function createHost(singleInstance = true) {
       this.focused = true;
     }
   }
+  const ipcMain = new EventEmitter();
+  state.ipcMain = ipcMain;
   const electron = {
+    ipcMain,
     app,
     BrowserWindow: MockWindow,
     Menu: {
@@ -97,7 +100,7 @@ async function createHost(singleInstance = true) {
     }
   };
   vm.runInNewContext(fs.readFileSync(path.join(desktopDirectory, 'main.cjs'), 'utf8'), {
-    require: name => name === 'electron' ? electron : name === 'node:fs' ? mockFs : require(name),
+    require: name => name === 'electron' ? electron : name === 'node:fs' ? mockFs : name === './local-backup.cjs' ? { createBackupStore: () => ({ load: () => ({ ok: true, empty: true }), save: () => ({ ok: true, persistent: true }) }) } : name === './app/core.cjs' ? require('../src/core.js') : require(name),
     __dirname: desktopDirectory,
     process: { argv: [], env: {} },
     Response,
@@ -143,7 +146,7 @@ test('the host isolates renderer privileges and denies external windows and navi
   assert.equal(preferences.nodeIntegration, false);
   assert.equal(preferences.webSecurity, true);
   assert.equal(preferences.webviewTag, false);
-  assert.equal(preferences.preload, undefined);
+  assert.equal(preferences.preload, path.join(desktopDirectory, 'preload.cjs'));
   assert.equal(window.openWindow().action, 'deny');
   assert.deepEqual(state.schemes[0].privileges, {
     standard: true,
@@ -177,4 +180,20 @@ test('the host keeps a stable profile and focuses the first instance', async () 
   const second = await createHost(false);
   assert.equal(second.state.windows.length, 0);
   assert.equal(second.state.quit, 1);
+});
+
+test('desktop data IPC rejects other frames and exposes no path operations', async () => {
+  const { state } = await createHost();
+  const contents = state.windows[0].webContents;
+  contents.mainFrame = { url: 'three-things://app/index.html' };
+  const valid = { sender: contents, senderFrame: contents.mainFrame };
+  state.ipcMain.emit('three-things:data-load', valid);
+  assert.equal(valid.returnValue.ok, true);
+  for (const event of [ { sender: {}, senderFrame: contents.mainFrame }, { sender: contents, senderFrame: { url: contents.mainFrame.url } } ]) {
+    state.ipcMain.emit('three-things:data-save', event, '{}');
+    assert.equal(event.returnValue.ok, false);
+  }
+  contents.mainFrame.url = 'https://example.invalid';
+  state.ipcMain.emit('three-things:data-load', valid);
+  assert.equal(valid.returnValue.ok, false);
 });

@@ -69,9 +69,9 @@
     assert(!/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(result), label + '包含无效字符');
     return result;
   }
-  function priority(value, nullable, label) {
+  function priority(value, nullable, label, minimum = 1) {
     if (nullable && value === null) return null;
-    assert(Number.isInteger(value) && value >= 1 && value <= 3, label + '应为 1、2 或 3');
+    assert(Number.isInteger(value) && value >= minimum && value <= 3, label + (minimum === 0 ? '应为 0、1、2 或 3' : '应为 1、2 或 3'));
     return value;
   }
   function isDate(value) {
@@ -84,6 +84,19 @@
   function deadline(value) {
     assert(value === null || isDate(value), '截止日期格式无效');
     return value;
+  }
+  function deadlineTime(value, due) {
+    if (value == null || value === '' || value === '24:00') return null;
+    assert(due && typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value), '截止时刻需要有效日期和小时分钟');
+    return value;
+  }
+  function effectiveDeadline(...records) {
+    const owner = records.find(item => item && item.due);
+    return { due: owner?.due || null, dueTime: owner?.dueTime || null };
+  }
+  function compareDeadlines(a, b) {
+    if (!a.due || !b.due) return a.due ? -1 : b.due ? 1 : 0;
+    return a.due.localeCompare(b.due) || (a.dueTime || '24:00').localeCompare(b.dueTime || '24:00');
   }
   function boolean(value, label) {
     assert(typeof value === 'boolean', label + '格式无效');
@@ -278,6 +291,7 @@
     return {
       schemaVersion: SCHEMA_VERSION,
       projects: [],
+      projectSort: 'priority',
       plans: {},
       routines: {},
       calendarEvents: [],
@@ -372,7 +386,7 @@
           title: project.title,
           priority: project.priority,
           importance: project.importance,
-          due: project.due || null,
+          ...effectiveDeadline(project),
           done,
           completedAt: done ? completionTimestamp(project.completedAt) : null,
           isProject: true,
@@ -392,7 +406,7 @@
             title: stage.title,
             priority: stagePriority,
             importance: project.importance,
-            due: stage.due || project.due || null,
+            ...effectiveDeadline(stage, project),
             done: stage.done,
             completedAt: stage.done ? completionTimestamp(stage.completedAt) : null,
             isProject: false,
@@ -408,7 +422,7 @@
             title: task.title,
             priority: task.priority === null ? stagePriority : task.priority,
             importance: project.importance,
-            due: task.due || stage.due || project.due || null,
+            ...effectiveDeadline(task, stage, project),
             done: task.done,
             completedAt: task.done ? completionTimestamp(task.completedAt) : null,
             isProject: false,
@@ -421,8 +435,14 @@
     }
     return result;
   }
-  function sortTasks(tasks) {
-    return tasks.slice().sort((a, b) => b.priority - a.priority || b.importance - a.importance || (a.due && b.due ? a.due.localeCompare(b.due) : a.due ? -1 : b.due ? 1 : 0));
+  function sortTasks(tasks, by = 'priority') {
+    return tasks.slice().sort((a, b) => by === 'due' ? compareDeadlines(a, b) || b.priority - a.priority : b.priority - a.priority || compareDeadlines(a, b));
+  }
+  // Flattened leaves retain stage/task order. Equal urgency keeps that order.
+  function projectLeadTask(leaves) {
+    let next = null;
+    for (const task of leaves) if (!task.done && (!next || task.priority > next.priority)) next = task;
+    return next;
   }
   function completedCount(model) {
     return new Set(flattenTasks(model).filter(task => task.done).map(task => task.id)).size;
@@ -481,7 +501,7 @@
         isStage: kind === 'stage',
         priority: kind === 'project' ? project.priority : record.priority === null ? stage.priority === null ? project.priority : stage.priority : record.priority,
         importance: project.importance,
-        due: record.due || (stage && stage.due) || project.due || null
+        ...effectiveDeadline(record, stage, project)
       });
     }
     for (const project of model.projects) {
@@ -588,6 +608,8 @@
     record(raw, '文件');
     assert(raw.schemaVersion === SCHEMA_VERSION, '不支持的数据版本，请使用此试用版导出的文件');
     const output = blankModel();
+    output.projectSort = raw.projectSort === undefined ? 'priority' : raw.projectSort;
+    assert(['priority', 'due'].includes(output.projectSort), '项目排序方式无效');
     const ids = new Set();
     let stageCount = 0,
       taskCount = 0,
@@ -604,9 +626,10 @@
       return {
         id: id(project.id),
         title: title(project.title, '项目标题'),
-        priority: priority(project.priority, false, '项目星级'),
-        importance: priority(project.importance, false, '重要程度'),
+        priority: priority(project.priority, false, '项目星级', 0),
+        ...(project.importance === undefined ? {} : { importance: priority(project.importance, false, '历史重要程度') }),
         due: deadline(project.due === undefined ? null : project.due),
+        dueTime: deadlineTime(project.dueTime, project.due),
         done: projectDone,
         completedAt: validateCompletedAt(project, projectDone),
         stages: list(project.stages, LIMITS.stages, '子阶段').map(stage => {
@@ -615,8 +638,9 @@
           return {
             id: id(stage.id),
             title: title(stage.title, '子阶段标题'),
-            priority: priority(stage.priority, true, '子阶段星级'),
+            priority: priority(stage.priority, true, '子阶段星级', 0),
             due: deadline(stage.due),
+            dueTime: deadlineTime(stage.dueTime, stage.due),
             done: boolean(stage.done, '子阶段完成状态'),
             completedAt: validateCompletedAt(stage, stage.done),
             tasks: list(stage.tasks, LIMITS.tasks, '小任务').map(task => {
@@ -625,8 +649,9 @@
               return {
                 id: id(task.id),
                 title: title(task.title, '小任务标题'),
-                priority: priority(task.priority, true, '小任务星级'),
+                priority: priority(task.priority, true, '小任务星级', 0),
                 due: deadline(task.due),
+                dueTime: deadlineTime(task.dueTime, task.due),
                 done: boolean(task.done, '小任务完成状态'),
                 completedAt: validateCompletedAt(task, task.done)
               };
@@ -717,6 +742,16 @@
       assert(isDate(event.date), '事件日期无效');
       const targetId = event.targetId === undefined ? null : event.targetId;
       assert(targetId === null || typeof targetId === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(targetId), '同步事项编号无效');
+      const startTime = event.startTime === undefined ? null : event.startTime;
+      const endTime = event.endTime === undefined ? null : event.endTime;
+      const clock = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+      assert(startTime === null || typeof startTime === 'string' && clock.test(startTime), '开始时间格式无效');
+      assert(endTime === null || typeof endTime === 'string' && (clock.test(endTime) || endTime === '24:00'), '截止时间格式无效');
+      assert(!startTime || !endTime || endTime > startTime, '截止时间须晚于开始时间');
+      const location = event.location === undefined ? '' : event.location;
+      assert(typeof location === 'string' && location.length <= 200 && !/[\u0000-\u001F]/.test(location), '备注需要为不超过 200 字的文字');
+      const color = event.color === undefined ? 'sage' : event.color;
+      assert(['sage', 'sky', 'lavender', 'rose', 'teal', 'sand'].includes(color), '日程颜色无效');
       const createdAt = notebookTime(event.createdAt);
       const updatedAt = notebookTime(event.updatedAt);
       assert(updatedAt >= createdAt, '事件修改时间不能早于创建时间');
@@ -724,7 +759,11 @@
         id: id(event.id),
         title: title(event.title, '事件名称'),
         date: event.date,
-        priority: priority(event.priority, false, '事件星级'),
+        startTime,
+        endTime,
+        location: location.trim(),
+        color,
+        priority: priority(event.priority, false, '事件星级', 0),
         targetId: projectIds.has(targetId) && !notebookEntries.some(entry => entry.id === targetId) ? targetId : null,
         createdAt,
         updatedAt
@@ -752,6 +791,9 @@
     sortedNotebookEntries,
     flattenTasks,
     sortTasks,
+    effectiveDeadline,
+    compareDeadlines,
+    projectLeadTask,
     completedCount,
     setCompletion,
     completedHistory,

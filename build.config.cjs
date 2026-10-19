@@ -9,5 +9,5 @@ module.exports = Object.freeze({
   stylesheet: 'styles.css',
   extraStylesheets: ['calendar.css'],
   libraries: ['core.js', 'calendar-core.js', 'storage.js', 'integrations.js', 'editor.js'],
-  application: ['app/state.js', 'app/records.js', 'app/task-views.js', 'app/daily-plan.js', 'app/notebook.js', 'app/calendar.js', 'app/navigation.js', 'app/dialogs.js', 'app.js']
+  application: ['app/state.js', 'app/records.js', 'app/undo.js', 'app/task-views.js', 'app/daily-plan.js', 'app/notebook.js', 'app/calendar.js', 'app/schedule-interactions.js', 'app/schedule-menu.js', 'app/navigation.js', 'app/dialogs.js', 'app.js']
 });

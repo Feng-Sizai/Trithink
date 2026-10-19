@@ -24,6 +24,76 @@
     for (let i = 0; i < 42; i++) days.push(shiftDate(first, i - offset));
     return days;
   }
+  function weekDays(day) {
+    assert(C.isDate(day), '日期无效');
+    const offset = (new Date(day + 'T12:00:00').getDay() + 6) % 7;
+    return Array.from({ length: 7 }, (_, i) => shiftDate(day, i - offset));
+  }
+  function timeMinutes(time) {
+    return Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+  }
+  const SCHEDULE = Object.freeze({ start: 360, end: 1440, hourHeight: 36, holdMs: 450 });
+  function minuteTime(minute) {
+    assert(Number.isInteger(minute) && minute >= 0 && minute <= 1440, '时间分钟数无效');
+    return String(Math.floor(minute / 60)).padStart(2, '0') + ':' + String(minute % 60).padStart(2, '0');
+  }
+  function scheduleMinute(offset) {
+    return Math.max(SCHEDULE.start, Math.min(SCHEDULE.end, Math.round(SCHEDULE.start + offset * 60 / SCHEDULE.hourHeight)));
+  }
+  function scheduleCreateRange(anchor, minute) {
+    assert([anchor, minute].every(Number.isInteger), '时间分钟数无效');
+    const snap = value => Math.max(SCHEDULE.start, Math.min(SCHEDULE.end, Math.round(value / 15) * 15));
+    const first = Math.min(snap(anchor), snap(minute), SCHEDULE.end - 15);
+    return { start: first, end: Math.max(first + 15, snap(anchor), snap(minute)) };
+  }
+  function scheduleRange(mode, start, end, anchor, minute) {
+    assert([start, end, anchor, minute].every(Number.isInteger), '时间分钟数无效');
+    const low = SCHEDULE.start, high = SCHEDULE.end;
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    if (mode === 'create') {
+      const first = clamp(Math.min(anchor, minute), low, high - 1);
+      return { start: first, end: clamp(Math.max(anchor, minute), first + 1, high) };
+    }
+    assert(start >= 0 && end <= high && end > start, '原日程时间无效');
+    if (mode === 'start') return { start: clamp(minute, low, end - 1), end };
+    if (mode === 'end') return { start, end: clamp(minute, Math.max(start + 1, low), high) };
+    assert(mode === 'move', '日程操作无效');
+    const next = clamp(start + minute - anchor, Math.min(low, start), high - (end - start));
+    return { start: next, end: next + end - start };
+  }
+  function scheduleMoveRange(start, end, anchor, minute) {
+    const range = scheduleRange('move', start, end, anchor, minute);
+    const duration = end - start;
+    const first = Math.ceil(Math.min(SCHEDULE.start, start) / 15) * 15;
+    const last = Math.floor((SCHEDULE.end - duration) / 15) * 15;
+    if (first > last) return { start, end };
+    const next = Math.max(first, Math.min(last, Math.round(range.start / 15) * 15));
+    return { start: next, end: next + duration };
+  }
+  function rescheduleEvent(model, id, date, range) {
+    const event = eventById(model, id);
+    return saveEvent(model, { title: event.title, date, priority: event.priority, startTime: minuteTime(range.start), endTime: minuteTime(range.end) }, id);
+  }
+  // Connected overlap groups share columns; touching endpoints do not overlap.
+  function scheduleLayout(events) {
+    const timed = events.filter(event => event.startTime && event.endTime).map(event => ({ event, start: timeMinutes(event.startTime), end: timeMinutes(event.endTime) })).sort((a, b) => a.start - b.start || b.end - a.end || a.event.id.localeCompare(b.event.id));
+    const result = [];
+    let group = [], ends = [], groupEnd = -1;
+    function flush() {
+      for (const item of group) result.push({ ...item, columns: ends.length });
+      group = []; ends = [];
+    }
+    for (const item of timed) {
+      if (item.start >= groupEnd) flush();
+      let column = ends.findIndex(end => end <= item.start);
+      if (column < 0) column = ends.length;
+      ends[column] = item.end;
+      group.push({ ...item, column });
+      groupEnd = group.length === 1 ? item.end : Math.max(groupEnd, item.end);
+    }
+    flush();
+    return result;
+  }
   // Unwrap the shortest circular arc before averaging, so midnight is continuous.
   function meanBedtime(times) {
     assert(times.length > 0 && times.every(time => timePattern.test(time)), '入睡时刻无效');
@@ -80,6 +150,10 @@
       title: values.title,
       date: values.date,
       priority: values.priority,
+      startTime: values.startTime === undefined ? existing?.startTime ?? null : values.startTime,
+      endTime: values.endTime === undefined ? existing?.endTime ?? null : values.endTime,
+      location: values.location === undefined ? existing?.location ?? '' : values.location,
+      color: values.color === undefined ? existing?.color ?? 'sage' : values.color,
       targetId: existing ? existing.targetId : null,
       createdAt: existing ? existing.createdAt : now,
       updatedAt: existing && now < existing.createdAt ? existing.createdAt : now
@@ -88,7 +162,7 @@
     const candidate = { ...model, calendarEvents: model.calendarEvents.filter(item => item.id !== id).concat(next) };
     const clean = C.validateModel(candidate).calendarEvents.find(item => item.id === next.id);
     const target = clean.targetId ? findTarget(model, clean.targetId) : null;
-    if (target) Object.assign(target.record, { title: clean.title, priority: clean.priority, due: clean.date });
+    if (target) Object.assign(target.record, { title: clean.title, priority: clean.priority, due: clean.date, dueTime: clean.endTime === '24:00' ? null : clean.endTime });
     if (existing) Object.assign(existing, clean);else model.calendarEvents.push(clean);
     return existing || clean;
   }
@@ -102,11 +176,12 @@
   function syncEvent(model, id, destination) {
     const event = eventById(model, id);
     assert(!findTarget(model, event.targetId), '此事件已同步，请直接编辑事件更新对应事项');
-    const record = { id: C.newId('item'), title: event.title, priority: event.priority, due: event.date, done: false, completedAt: null };
+    const record = { id: C.newId('item'), title: event.title, priority: event.priority, due: event.date, dueTime: event.endTime === '24:00' ? null : event.endTime, done: false, completedAt: null };
     if (destination.kind === 'project') {
-      assert(Number.isInteger(destination.importance) && destination.importance >= 1 && destination.importance <= 3, '请选择重要程度');
+      // Only legacy callers provide importance; it is no longer shown or used to rank.
+      if (destination.importance !== undefined) assert(Number.isInteger(destination.importance) && destination.importance >= 1 && destination.importance <= 3, '历史重要程度无效');
       assert(model.projects.length < C.LIMITS.projects, '项目数量已达上限');
-      Object.assign(record, { importance: destination.importance, stages: [] });
+      Object.assign(record, { ...(destination.importance === undefined ? {} : { importance: destination.importance }), stages: [] });
       model.projects.push(record);
     } else {
       const project = model.projects.find(item => item.id === destination.projectId);
@@ -146,6 +221,39 @@
     if (withTarget && event.targetId) deleteTarget(model, event.targetId);
     model.calendarEvents = model.calendarEvents.filter(item => item.id !== id);
   }
+  function removeEventFromProject(model, id) {
+    const event = eventById(model, id);
+    if (event.targetId) deleteTarget(model, event.targetId);
+    event.targetId = null;
+    return event;
+  }
+  function repeatDates(event, options) {
+    assert(C.isDate(event.date), '原日程日期无效');
+    const interval = options.interval;
+    assert(Number.isInteger(interval) && interval >= 1 && interval <= 36500, '自定义间隔需为 1–36500 的整数天');
+    let count;
+    if (options.mode === 'count') {
+      count = options.count;
+      assert(Number.isInteger(count) && count >= 1 && count <= C.LIMITS.calendarEvents, '重复次数需为 1–10000 的整数（不含原日程）');
+    } else {
+      assert(options.mode === 'until' && C.isDate(options.until) && options.until > event.date, '重复截止日期须晚于原日程日期');
+      const days = (new Date(options.until + 'T12:00:00Z') - new Date(event.date + 'T12:00:00Z')) / 86400000;
+      count = Math.floor(days / interval);
+      assert(count >= 1, '截止日期前没有符合间隔的未来日期');
+      assert(count <= C.LIMITS.calendarEvents, '未来日程超过 10000 条，请缩短截止日期或增大间隔');
+    }
+    return Array.from({ length: count }, (_, i) => shiftDate(event.date, interval * (i + 1)));
+  }
+  function repeatEvent(model, id, options, now = new Date().toISOString()) {
+    const event = eventById(model, id);
+    const dates = repeatDates(event, options);
+    assert(model.calendarEvents.length + dates.length <= C.LIMITS.calendarEvents, '日程总数将超过 10000 条，请减少重复次数');
+    const copies = dates.map(date => ({ ...event, id: C.newId('event'), date, targetId: null, createdAt: now, updatedAt: now }));
+    // Batch validation keeps an invalid range or capacity error fully atomic.
+    const clean = C.validateModel({ ...model, calendarEvents: model.calendarEvents.concat(copies) }).calendarEvents.slice(model.calendarEvents.length);
+    model.calendarEvents.push(...clean);
+    return clean;
+  }
   function sampleModel(today = C.localDate()) {
     const model = C.sampleModel(today);
     const times = ['23:30', '00:10', '23:50', '00:00', '23:30', '00:30', '00:00'];
@@ -159,7 +267,7 @@
     saveEvent(model, { title: '本周读书分享', date: today, priority: 1 });
     return C.validateModel(model);
   }
-  const api = Object.freeze({ shiftDate, monthDays, meanBedtime, statistics, saveSleep, addDrink, findTarget, saveEvent, syncEvent, deleteTarget, deleteEvent, sampleModel });
+  const api = Object.freeze({ shiftDate, monthDays, weekDays, timeMinutes, SCHEDULE, minuteTime, scheduleMinute, scheduleCreateRange, scheduleRange, scheduleMoveRange, rescheduleEvent, scheduleLayout, meanBedtime, statistics, saveSleep, addDrink, findTarget, saveEvent, syncEvent, deleteTarget, deleteEvent, removeEventFromProject, repeatDates, repeatEvent, sampleModel });
   root.ThreeThingsCalendar = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

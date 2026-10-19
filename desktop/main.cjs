@@ -6,13 +6,15 @@ const {
   BrowserWindow,
   Menu,
   protocol,
-  session
+  session,
+  ipcMain
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const APP_URL = "three-things://app/index.html";
 const APP_FILE = path.join(__dirname, "app", "index.html");
 let mainWindow = null;
+let backupStore = null;
 
 // Keep the profile stable across frontend versions and separate from browsers.
 app.setName("ThreeThings");
@@ -51,6 +53,7 @@ function createWindow() {
     backgroundColor: "#f8f9f6",
     autoHideMenuBar: true,
     webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
@@ -75,7 +78,7 @@ function createWindow() {
     mainWindow = null;
   });
   // Blob-backed <a download> exports and file inputs use Chromium's normal flow.
-  // There is no download interception, preload script, IPC, or renderer Node API.
+  // The preload exposes only validated local data load/save, never filesystem access.
   return mainWindow.loadURL(APP_URL);
 }
 if (!app.requestSingleInstanceLock()) {
@@ -90,6 +93,19 @@ if (!app.requestSingleInstanceLock()) {
   app.on("window-all-closed", () => app.quit());
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
+    backupStore = require('./local-backup.cjs').createBackupStore({
+      directory: path.join(userData, 'auto-backups'),
+      Core: require('./app/core.cjs')
+    });
+    function trusted(event) {
+      return mainWindow && event.sender === mainWindow.webContents && event.senderFrame === mainWindow.webContents.mainFrame && event.senderFrame.url === APP_URL;
+    }
+    ipcMain.on('three-things:data-load', event => {
+      event.returnValue = trusted(event) ? backupStore.load() : { ok: false, error: '无效的数据读取来源' };
+    });
+    ipcMain.on('three-things:data-save', (event, json) => {
+      event.returnValue = trusted(event) ? backupStore.save(json) : { ok: false, persistent: false, error: '无效的数据保存来源' };
+    });
     session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => callback(false));
     session.defaultSession.setPermissionCheckHandler(() => false);
     protocol.handle("three-things", async request => {

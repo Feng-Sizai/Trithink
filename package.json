@@ -1,6 +1,6 @@
 {
   "name": "three-things-offline-trial",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Dependency-free, offline, editable personal project manager",
   "scripts": {

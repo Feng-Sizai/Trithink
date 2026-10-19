@@ -1570,6 +1570,8 @@ progress::-moz-progress-bar {
 }
 
 .toast {
+  opacity: 1;
+  transition: opacity .35s ease, visibility .35s ease;
   position: fixed;
   z-index: 20;
   bottom: 26px;
@@ -1586,6 +1588,21 @@ progress::-moz-progress-bar {
   box-shadow: 0 8px 26px #15332520;
 }
 
+.toast.toast-fading {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.toast-action {
+  margin-left: 12px;
+  padding: 0 3px;
+  min-height: 24px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
 .toast:empty {
   display: none;
 }
@@ -1997,3 +2014,26 @@ progress::-moz-progress-bar {
   }
 
 }
+
+/* Project cards expose their interactive surface and keyboard focus. */
+.project-card { cursor: context-menu; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+.project-card:hover, .project-card:focus-within { border-color: #9ebda8; box-shadow: 0 8px 24px #254e3712; transform: translateY(-2px); }
+.project-card:focus-visible { outline: 3px solid #78a78b; outline-offset: 3px; }
+.modal-actions .modal-delete { margin-right: auto; }
+@media (prefers-reduced-motion: reduce) { .project-card { transition: none; } .project-card:hover, .project-card:focus-within { transform: none; } }
+
+.task-card { cursor: pointer; transition: box-shadow .15s ease, transform .15s ease; }
+.task-card:hover,.task-card:focus-within { box-shadow: 0 8px 24px #254e3720; transform: translateY(-2px); }
+.task-card:focus-visible { outline: 3px solid #78a78b; outline-offset: 3px; }
+.deadline-badge { padding: 5px 10px; border-radius: 8px; background: #eaf2ed; color: #32634d; }
+.deadline-badge.overdue { background: #f7e5e9; color: #9c3650; }
+.project-sort { display: flex; align-items: center; gap: 12px; margin: 0 0 20px; }
+.project-sort select { width: auto; min-width: 170px; }
+.end-of-day { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.end-of-day input { width: auto; }
+@media (prefers-reduced-motion: reduce) { .task-card { transition: none; } .task-card:hover,.task-card:focus-within { transform: none; } }
+
+.deadline-fields { margin: 0; padding: 0; border: 0; min-width: 0; }
+.deadline-fields legend { margin-bottom: 8px; padding: 0; }
+.deadline-inputs { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; }
+.deadline-inputs input { min-width: 0; width: 100%; }

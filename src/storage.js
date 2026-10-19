@@ -25,7 +25,7 @@
   }
 
   // Load the primary record, recover a valid backup, or open the initial model.
-  function load(defaultFactory) {
+  function loadBrowser(defaultFactory) {
     let storage;
     try {
       storage = root.localStorage;
@@ -96,7 +96,7 @@
   }
 
   // Validate and check the size before updating memory or persistent records.
-  function save(raw) {
+  function saveBrowser(raw) {
     let model;
     try {
       model = Core.validateModel(raw);
@@ -151,6 +151,43 @@
         error: '无法写入本地存储，可能是空间不足或浏览器限制。内容暂存于内存，请立即导出备份。'
       };
     }
+  }
+
+  const desktop = root.document?.body?.dataset.preview !== 'calendar' ? root.ThreeThingsDesktop : null;
+  function load(defaultFactory) {
+    if (!desktop) return loadBrowser(defaultFactory);
+    try {
+      const native = desktop.load();
+      if (!native.ok) throw new Error(native.error);
+      if (native.json) {
+        const model = parse(native.json);
+        remember(model);
+        return { model: copyMemory(), persistent: true, recovered: Boolean(native.recovered) };
+      }
+      const legacy = loadBrowser(defaultFactory);
+      if (!legacy.isNew && (!legacy.error || legacy.recovered)) {
+        const migrated = desktop.save(exportJSON(legacy.model));
+        return { ...legacy, persistent: Boolean(migrated.ok && migrated.persistent), error: migrated.error };
+      }
+      return { ...legacy, error: native.error || legacy.error };
+    } catch (error) {
+      const legacy = loadBrowser(defaultFactory);
+      return { ...legacy, persistent: false, error: error.message || '无法读取本机数据，请导入有效备份。' };
+    }
+  }
+  function save(raw) {
+    if (!desktop) return saveBrowser(raw);
+    let json;
+    try { json = exportJSON(raw); } catch (error) { return { ok: false, persistent: false, error: error.message }; }
+    try {
+      const result = desktop.save(json);
+      if (result.ok) {
+        remember(parse(json));
+        // Browser storage is a secondary mirror; its loss does not affect native files.
+        saveBrowser(raw);
+      }
+      return result;
+    } catch (_) { return { ok: false, persistent: false, error: '本机保存服务不可用，本次修改未保存。请导出备份。' }; }
   }
 
   // Portable backups use the same validation and size budget as local storage.

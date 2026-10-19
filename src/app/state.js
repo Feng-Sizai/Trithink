@@ -21,6 +21,7 @@ if (calendarPreview && loaded.isNew) model = K.sampleModel(today);
 let page = calendarPreview ? 'calendar' : 'today';
 let calendarMonth = today.slice(0, 7);
 let calendarDay = today;
+let calendarView = 'month';
 let activeProject = null;
 let editor = null;
 let editorNoteId = null;
@@ -33,8 +34,8 @@ let showQueue = false;
 let showDone = false;
 let boot = Boolean(loaded.isNew) && !calendarPreview;
 const labels = ['低', '中', '高'];
-const urgencyLabels = ['缓', '急', '立刻'];
-const sortDescription = '紧急程度（星级）>重要程度>截止时间';
+const priorityLabels = ['日常', '普通', '重要', '极重要'];
+const sortDescription = '重要程度（星级）>截止时间';
 const drinks = [{
   id: 'coffee',
   name: '咖啡'

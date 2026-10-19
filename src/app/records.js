@@ -30,10 +30,30 @@ function recordById(id) {
     record: leaf.isStage ? group.stage : group.stage.tasks.find(t => t.id === id)
   };
 }
-function toast(message, error = false) {
+let toastTimer = null;
+let toastClearTimer = null;
+function toast(message, error = false, action = null) {
+  clearTimeout(toastTimer);
+  clearTimeout(toastClearTimer);
   const el = $('#toast');
+  el.classList.remove('toast-fading');
   el.textContent = message;
   el.classList.toggle('error', error);
+  if (action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'toast-action';
+    button.dataset.action = action.name;
+    button.textContent = action.label;
+    el.append(button);
+  }
+  if (message) toastTimer = setTimeout(() => {
+    el.classList.add('toast-fading');
+    toastClearTimer = setTimeout(() => {
+      el.textContent = '';
+      el.classList.remove('toast-fading');
+    }, 350);
+  }, 5000);
 }
 function cleanPlans() {
   const valid = new Set(flat().map(t => t.id));
@@ -45,7 +65,7 @@ function cleanPlans() {
     p.manualSelected = [...new Set(p.manualSelected || [])].filter(id => valid.has(id)).slice(0, 3);
   }
 }
-function save(message) {
+function save(message, { recordUndo = true } = {}) {
   C.syncAutoProjects(model, today);
   cleanPlans();
   try {
@@ -60,6 +80,8 @@ function save(message) {
       error: error.message
     };
   }
+  const before = JSON.stringify(lastGood);
+  const after = JSON.stringify(model);
   const result = S.save(model);
   if (!result.ok) {
     model = C.validateModel(lastGood);
@@ -67,10 +89,11 @@ function save(message) {
     toast(result.error || '保存失败，本次修改没有生效。', true);
     return result;
   }
+  if (recordUndo) rememberOperation(before, after);
   lastGood = C.validateModel(model);
   memoryOnly = !result.persistent;
   updateSidebar();
-  if (!result.persistent) toast('当前浏览器未能持久保存。请先导出备份，再关闭程序。', true);else if (message) toast(message);
+  if (!result.persistent || result.error) toast(result.error || '未能持久保存，请先导出备份。', true);else if (message) toast(message);
   return result;
 }
 function updateSidebar() {

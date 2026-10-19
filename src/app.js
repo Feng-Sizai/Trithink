@@ -3,10 +3,15 @@
  */
 document.addEventListener('click', event => {
   const button = event.target.closest('button');
-  if (!button || button.disabled) return;
+  if (!button) {
+    const card = event.target.closest('.task-card[data-card-id]');
+    if (card && !modal.open && !event.target.closest('a,input,select,textarea')) openTodayProject(card.dataset.cardId);
+    return;
+  }
+  if (button.disabled) return;
   if (button.dataset.page) {
     if (!captureNotebook()) return;
-    const result = save();
+    const result = save(undefined, { recordUndo: Boolean(editor) });
     if (!result.ok) return;
     const fromOtherFeatures = otherFeaturesPopover.contains(button);
     closeOtherFeatures();
@@ -89,7 +94,7 @@ document.addEventListener('click', event => {
   if (action === 'note-new') newNote();
   if (action === 'note-history') {
     if (!captureNotebook()) return;
-    const result = save();
+    const result = save(undefined, { recordUndo: Boolean(editor) });
     if (!result.ok) return;
     destroyEditor(false);
     page = 'note-history';
@@ -102,7 +107,7 @@ document.addEventListener('click', event => {
   if (action === 'open-note') {
     if (!noteEntry(id)) return;
     model.notebook.activeEntryId = id;
-    save();
+    save(undefined, { recordUndo: false });
     page = 'notebook';
     render();
   }
@@ -120,7 +125,7 @@ document.addEventListener('click', event => {
   }
   if (action === 'add-drink') {
     const d = drinks.find(d => d.id === button.dataset.kind);
-    openModal('确认记录饮品', `<p class="muted small">记录日期：${esc(button.dataset.date || today)}</p><p>是否记录新摄入一杯${d.id === 'other' ? '其他饮品' : d.name}？</p><p class="danger">确认后不可取消。</p>`, 'confirm-drink', {
+    openModal('确认记录饮品', `<p class="muted small">记录日期：${esc(button.dataset.date || today)}</p><p>是否记录新摄入一杯${d.id === 'other' ? '其他饮品' : d.name}？</p><p class="danger">确认后可按 Ctrl+Z 撤销。</p>`, 'confirm-drink', {
       id: d.id,
       date: C.isDate(button.dataset.date) ? button.dataset.date : today
     });
@@ -151,21 +156,23 @@ document.addEventListener('submit', event => {
       const title = String(data.get('title') || '').trim();
       if (!title) throw new Error('请填写名称。');
       const priority = data.get('priority') ? Number(data.get('priority')) : null,
-        due = data.get('due') || null;
+        due = data.get('due') || null,
+        dueTime = data.get('dueTime') || null;
+      if (dueTime && !due) throw new Error('请先选择截止日期，再设置具体时刻。');
       if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) throw new Error('请选择有效的截止日期。');
       if (context.kind === 'project') {
         if (context.id) Object.assign(projectById(context.id), {
           title,
           priority,
           due,
-          importance: Number(data.get('importance'))
+          dueTime
         });else {
           const p = {
             id: C.newId('p'),
             title,
             priority,
             due,
-            importance: Number(data.get('importance')),
+            dueTime,
             done: false,
             stages: []
           };
@@ -178,7 +185,8 @@ document.addEventListener('submit', event => {
         if (context.id) Object.assign(stageById(context.id).stage, {
           title,
           priority,
-          due
+          due,
+          dueTime
         });else {
           const project = projectById(context.projectId),
             wasLeaf = !project.stages.length,
@@ -187,6 +195,7 @@ document.addEventListener('submit', event => {
               title,
               priority,
               due,
+              dueTime,
               done: false,
               tasks: []
             };
@@ -204,7 +213,8 @@ document.addEventListener('submit', event => {
         if (context.id) Object.assign(recordById(context.id).record, {
           title,
           priority,
-          due
+          due,
+          dueTime
         });else {
           const g = stageById(context.stageId),
             wasLeaf = !g.stage.tasks.length,
@@ -213,6 +223,7 @@ document.addEventListener('submit', event => {
               title,
               priority,
               due,
+              dueTime,
               done: false
             };
           g.stage.tasks.push(t);
@@ -263,6 +274,27 @@ document.addEventListener('submit', event => {
   }
 });
 document.addEventListener('change', async event => {
+  if (event.target.id === 'project-sort') {
+    model.projectSort = event.target.value === 'due' ? 'due' : 'priority';
+    save();
+    render();
+    $('#project-sort')?.focus();
+    return;
+  }
+  if (event.target.name === 'endOfDay') {
+    const input = $('[name="endTime"]', modal);
+    input.disabled = event.target.checked;
+    return;
+  }
+  if (event.target.id === 'schedule-date') {
+    const day = event.target.value;
+    if (C.isDate(day) && day >= '0002-01-01' && day <= '9998-12-31') {
+      calendarDay = day;
+      calendarMonth = day.slice(0, 7);
+      render();
+    }
+    return;
+  }
   if (event.target.id === 'calendar-month') {
     if (/^(?!000[01])\d{4}-\d{2}$/.test(event.target.value) && C.isDate(event.target.value + '-01') && event.target.value < '9999-01') {
       calendarMonth = event.target.value;
@@ -294,18 +326,19 @@ modal.addEventListener('cancel', () => {
   modalContext = null;
 });
 window.addEventListener('beforeunload', () => {
-  if (captureNotebook()) save();
+  if (captureNotebook()) save(undefined, { recordUndo: false });
 });
 setInterval(() => {
   const next = C.localDate();
   if (next !== today) {
     if (!captureNotebook()) return;
     today = next;
-    save();
+    save(undefined, { recordUndo: false });
     render();
     toast('新的一天开始了，请重新选择今日任务。');
   }
 }, 60000);
+if (window.ThreeThingsDesktop) $('.local-label').textContent = '本机保存 · 每次修改自动备份';
 render();
 if (calendarPreview && loaded.isNew) save();
 if (loaded.recovered) toast('已从本机上一份有效备份恢复数据。建议导出一份备份。');else if (loaded.error) toast(loaded.error, true);
