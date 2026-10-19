@@ -1,0 +1,319 @@
+{
+  "project": "三件事",
+  "version": "0.4.0",
+  "date": "2026-10-19",
+  "personalDataIncluded": false,
+  "sourceFiles": 56,
+  "entries": [
+    {
+      "path": "三件事-0.4.0-离线网页演示.html",
+      "bytes": 178286,
+      "sha256": "3cc05e8597b782ae19d993a145ee0fadf3337c9a45fb1207ec9776493b34fcf9"
+    },
+    {
+      "path": "三件事-共享资料导入说明.md",
+      "bytes": 1912,
+      "sha256": "0f2a4d8b191a83dfccc0e6658936d28fbe8cd17de8a80bdf3a8c2705a40aceaf"
+    },
+    {
+      "path": "三件事-完整源码-0.4.0.txt",
+      "bytes": 389118,
+      "sha256": "9072216ae737ed8034af539abd77d49063368ef3aeff64f66018ab9ae9525d5f"
+    },
+    {
+      "path": "三件事-设计演进记录-0.4.0.md",
+      "bytes": 5289,
+      "sha256": "6d9ebb7d896d3c4e3b83f7028f2723a0133bad93e68ea704be8d15fe72cc6f7b"
+    },
+    {
+      "path": "三件事-项目上下文-0.4.0.md",
+      "bytes": 11136,
+      "sha256": "3602345acee70b20459fe61a426db68561f0c27fe2b701ab96be62bc7a00a1f7"
+    },
+    {
+      "path": "源码/.editorconfig",
+      "bytes": 188,
+      "sha256": "6d6796f174b736bcd7a68999e30d2f19a3719ad92355dcc0cfdfce8a66864553"
+    },
+    {
+      "path": "源码/.gitignore",
+      "bytes": 70,
+      "sha256": "6528228c8e7ceceaad0b8fb0d2a1b4b09f71bc4944eeff770398e12d223851b4"
+    },
+    {
+      "path": "源码/AGENTS.md",
+      "bytes": 1634,
+      "sha256": "b1462e1c46df6bbf6c2a18e3c7397aaf8a51f152e2f7e519bef9dc2fd2d13a87"
+    },
+    {
+      "path": "源码/README.md",
+      "bytes": 4251,
+      "sha256": "54e88695081d9252bd9074cddbf5550fc42a6a6555d16811a2e17c3adc24eb58"
+    },
+    {
+      "path": "源码/build.cjs",
+      "bytes": 198,
+      "sha256": "9f5306a3c4054372501e52744867a5f1fdc845804790bab380d3099b75289d8c"
+    },
+    {
+      "path": "源码/build.config.cjs",
+      "bytes": 592,
+      "sha256": "c039f8077a487ad648df6b406f82c3d46415ad65e4dafb4176aac71fe8a1c1ef"
+    },
+    {
+      "path": "源码/desktop/README.md",
+      "bytes": 1576,
+      "sha256": "cf078e8b8ad417475b7d1c49195f2bd28921d4529599c2cb4b0abe4e6534196f"
+    },
+    {
+      "path": "源码/desktop/assets/README.md",
+      "bytes": 808,
+      "sha256": "fd15683d1dbad848df5b22880b0159f95cafe483124078410ec38579542d1d1e"
+    },
+    {
+      "path": "源码/desktop/assets/generate-icon.py",
+      "bytes": 3052,
+      "sha256": "9ce96708f925d9af4b59dfdbe90cb83d90c7a0711eca0269a76d85be84c55e19"
+    },
+    {
+      "path": "源码/desktop/assets/icon.ico",
+      "bytes": 17182,
+      "sha256": "847a5fc8116501f592e6513963236a5205c6d6491d9edb060a1039de05243aea"
+    },
+    {
+      "path": "源码/desktop/assets/icon.png",
+      "bytes": 29256,
+      "sha256": "8fabddec8051408f480b661310bda5dde250ec4531b971d10c17ae796968b0d5"
+    },
+    {
+      "path": "源码/desktop/assets/icon.svg",
+      "bytes": 755,
+      "sha256": "7f52058cfd3b93297138d8817677ce7ff25de3aa5f61e18587e2f55317d6a5cd"
+    },
+    {
+      "path": "源码/desktop/electron-builder.cjs",
+      "bytes": 1346,
+      "sha256": "5ad55ea5dfc5a672f5dd973f9ab5161b08cd2e6ee2242ab2f1542ccad1be0303"
+    },
+    {
+      "path": "源码/desktop/installer.nsh",
+      "bytes": 924,
+      "sha256": "985174940048b8a8e3944a0868da22b6febc80d9c3d11bae2512e0152655f1f8"
+    },
+    {
+      "path": "源码/desktop/main.cjs",
+      "bytes": 3925,
+      "sha256": "d7051935057c737d7ade15d50c8014abe06d71594db79662e22fafdfc6ddc473"
+    },
+    {
+      "path": "源码/desktop/package-lock.json",
+      "bytes": 127652,
+      "sha256": "b22ccf3a9087f68f751eea1ba211473b30937657fa6891c8a6a6c13364356e45"
+    },
+    {
+      "path": "源码/desktop/package.json",
+      "bytes": 579,
+      "sha256": "40511a8271a1282f7da57b2c2c8113a52f980381a9d35b2f72fe9bec6aa9712a"
+    },
+    {
+      "path": "源码/package.json",
+      "bytes": 619,
+      "sha256": "ebb6e52c459175965e3ae3113af02e78f11990d1482cfff5714fec86ebd28967"
+    },
+    {
+      "path": "源码/scripts/build.cjs",
+      "bytes": 1937,
+      "sha256": "11af35c24d3260abb0bf7de86412f9939907665851d30e92df401f78719754f3"
+    },
+    {
+      "path": "源码/scripts/check.cjs",
+      "bytes": 1362,
+      "sha256": "5105c4d35b338d7c3e7f7e73ea073a1d0daa70f9b262facff183b3699603a368"
+    },
+    {
+      "path": "源码/scripts/desktop.cjs",
+      "bytes": 848,
+      "sha256": "13e37072f956eed0af870c4883a1250955aa949a978f76027ae05f0c6cac2edf"
+    },
+    {
+      "path": "源码/scripts/prepare-desktop.cjs",
+      "bytes": 607,
+      "sha256": "9400086bd533315af484bebf5089c292a3065fe6cdc5be9ea7166ce6f6d49de7"
+    },
+    {
+      "path": "源码/scripts/preview-calendar.cjs",
+      "bytes": 1479,
+      "sha256": "eaf11be9246972f3e1be122c760c22dfa28222cfd0c6c40288d829bb280e19ed"
+    },
+    {
+      "path": "源码/scripts/setup-desktop.cjs",
+      "bytes": 807,
+      "sha256": "2ba67998d4d6773bdcb54385c736e990daa5a7cb42749aa2108f47d0d85fb397"
+    },
+    {
+      "path": "源码/scripts/verify-build.cjs",
+      "bytes": 1395,
+      "sha256": "02754e8839788fe528ca66bf119be64c5dac4a650579ad7a531681353b4379f0"
+    },
+    {
+      "path": "源码/src/app.js",
+      "bytes": 10702,
+      "sha256": "d90f54c57f0be86e9f0de1a0db54ecd8607b067e381ead3465abe52962e5c617"
+    },
+    {
+      "path": "源码/src/app/calendar.js",
+      "bytes": 13851,
+      "sha256": "04d8c102430cc9b55af089471c03762e79b1999a5168f4c37bd08768e6a3d848"
+    },
+    {
+      "path": "源码/src/app/daily-plan.js",
+      "bytes": 4943,
+      "sha256": "8c23391faa46c08bd58463cca0933c0f5037d188c86a612b158961b6456cd047"
+    },
+    {
+      "path": "源码/src/app/dialogs.js",
+      "bytes": 6911,
+      "sha256": "28a935b15023810d389b15bde4fb3e137b39694377564d768ac45f801ae85e5e"
+    },
+    {
+      "path": "源码/src/app/navigation.js",
+      "bytes": 3151,
+      "sha256": "230044e0a8731109f8cbf32581a11632bc5c97f9e9d39427494d568422835054"
+    },
+    {
+      "path": "源码/src/app/notebook.js",
+      "bytes": 7359,
+      "sha256": "0a944346f3b7594a5b0556a2d1304029706a3d142c4b90014e876d4ad722e1ef"
+    },
+    {
+      "path": "源码/src/app/records.js",
+      "bytes": 2763,
+      "sha256": "db1b567eaaca907defe710f04a8a4123fc0b4e84818c7084e2bbd6cb613fd00e"
+    },
+    {
+      "path": "源码/src/app/state.js",
+      "bytes": 2433,
+      "sha256": "9c8b7b52942728329d0c4bd87e78b3cdbc4d169e3c49aade8df5d77f0e4342a6"
+    },
+    {
+      "path": "源码/src/app/task-views.js",
+      "bytes": 17092,
+      "sha256": "87d94f3005766cf3310cc298ea5b86974d8c1a5490a0d55c53f9ddf3bb6e7351"
+    },
+    {
+      "path": "源码/src/calendar-core.js",
+      "bytes": 9081,
+      "sha256": "e29389697154a79396fa63646465bd91803951eee60fad314f1432bcaf6070e0"
+    },
+    {
+      "path": "源码/src/calendar.css",
+      "bytes": 5985,
+      "sha256": "170371e1b5f5add87aaf04eddc5261842280e80dae171e2a2899d69dd735bc87"
+    },
+    {
+      "path": "源码/src/core.js",
+      "bytes": 31794,
+      "sha256": "159ebf633dbefa38f2ab455c236724a7c95219c93a3dd04f741ef568ff25859d"
+    },
+    {
+      "path": "源码/src/editor.js",
+      "bytes": 16229,
+      "sha256": "b92fc35f0add0bfd4abfac62bdf779f6a67b517843d76db26de810dcfdffbbda"
+    },
+    {
+      "path": "源码/src/integrations.js",
+      "bytes": 3201,
+      "sha256": "61aa3654473695801f83fcb25cf2f3471b1bd09702706ee5f679b32e58f64cd7"
+    },
+    {
+      "path": "源码/src/shell.html",
+      "bytes": 4065,
+      "sha256": "0b3c71bab05c46b8a71b094ea9dd71bb4537f819e37f7f5fbd894f31f844e338"
+    },
+    {
+      "path": "源码/src/storage.js",
+      "bytes": 5933,
+      "sha256": "c45ff23430990bc008eee09f382bf4fd2dcfdc768da751062d51d02bba1b19a2"
+    },
+    {
+      "path": "源码/src/styles.css",
+      "bytes": 32176,
+      "sha256": "534e61cc67154ce93889a84078928a72417214febe3b9f7f199f6a09d2589aa7"
+    },
+    {
+      "path": "源码/tests/build.test.cjs",
+      "bytes": 1182,
+      "sha256": "198714e98bcc35a1cfd7bd2da4870606ea3c81c20892e88d081c99901b345e8f"
+    },
+    {
+      "path": "源码/tests/calendar.test.cjs",
+      "bytes": 8526,
+      "sha256": "2aaf2259e2fb899ac5099cd17e901df160970428687a31075a9634806dab3b3c"
+    },
+    {
+      "path": "源码/tests/core.test.cjs",
+      "bytes": 30902,
+      "sha256": "0b2e72e14ffbd396635ce94ddc1172d26d4dd89c73b8bd7c1bdb2b65ce1bb637"
+    },
+    {
+      "path": "源码/tests/daily-plan.test.cjs",
+      "bytes": 5152,
+      "sha256": "f7902552a82d6effad2bd519e11716242fbd6ad4596c637134d4e970f7b79b51"
+    },
+    {
+      "path": "源码/tests/desktop.test.cjs",
+      "bytes": 5132,
+      "sha256": "9092c58d653978ff05e18323d7f0e77ea3d76152efe5b702044736f7ce1f2ae5"
+    },
+    {
+      "path": "源码/tests/integrations.test.cjs",
+      "bytes": 5138,
+      "sha256": "974c35235ded0953f4155946185931fea5c7771f15b36c09fbf48bf495b897db"
+    },
+    {
+      "path": "源码/tests/upgrade.test.cjs",
+      "bytes": 1305,
+      "sha256": "d3bef037e24f6627423c8d17e675afb3625988628272e1ac250a2a3cf2286150"
+    },
+    {
+      "path": "源码/使用说明.md",
+      "bytes": 6130,
+      "sha256": "171908e9da297d83459ba15f3657afffc8aff6e14f4cd45ca020efdb1276c3c5"
+    },
+    {
+      "path": "源码/安装与使用说明.md",
+      "bytes": 3974,
+      "sha256": "92b0ad38bb8b764d0b96b1b73cf27301e435dc27c02c7d29dfa271da0908df85"
+    },
+    {
+      "path": "源码/开发说明.md",
+      "bytes": 9279,
+      "sha256": "2ee12d76de9095154c081b409def601b607804bad61c64558307d64fc305881f"
+    },
+    {
+      "path": "源码/接口扩展说明.md",
+      "bytes": 2785,
+      "sha256": "b58c018508ff2b5efc4a64b43fba7d034e55ac51fedfe2d9a571e9e5b25582ca"
+    },
+    {
+      "path": "源码/更新记录.md",
+      "bytes": 5445,
+      "sha256": "45d0f910dfd4740e95d6a353165fa1a901f86e031023625a63ffe832e10e69c6"
+    },
+    {
+      "path": "源码/桌面打包说明.md",
+      "bytes": 3651,
+      "sha256": "90e77f4c590fc6b39c7fbe54c3f28014840e564a769f0452f59922a61b16bdfb"
+    },
+    {
+      "path": "源码/验证记录.md",
+      "bytes": 11667,
+      "sha256": "de6e33fe4382fa6a64cc2c8932a81d93326445dbe7dac10cafad1467337ee708"
+    },
+    {
+      "path": "阅读说明.md",
+      "bytes": 982,
+      "sha256": "b605caa85014ab6d898cd1edcc803e552f5ecdfc365d7b770e444afbe5a0025c"
+    }
+  ]
+}

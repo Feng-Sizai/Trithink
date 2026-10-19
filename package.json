@@ -1,0 +1,20 @@
+{
+  "name": "three-things-offline-trial",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Dependency-free, offline, editable personal project manager",
+  "scripts": {
+    "build": "node build.cjs",
+    "test": "node --test",
+    "check": "node scripts/check.cjs",
+    "verify": "node scripts/verify-build.cjs",
+    "desktop:setup": "node scripts/setup-desktop.cjs",
+    "desktop:prepare": "node scripts/prepare-desktop.cjs",
+    "desktop:dev": "node scripts/desktop.cjs start",
+    "desktop:package": "node scripts/desktop.cjs package"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}

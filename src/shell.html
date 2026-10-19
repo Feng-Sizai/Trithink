@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src {{SCRIPT_CSP}}; style-src {{STYLE_CSP}}; img-src data:; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="三件事：把事情拆小，一件件完成。本地试用版，支持项目、今日计划、速写本与今日作息。">
+  <title>三件事 · 本地试用版</title>
+  <!-- APP_STYLES -->
+</head>
+<body>
+  <div id="app" class="app">
+    <aside class="sidebar" aria-label="三件事导航">
+      <div class="brand"><span class="brand-logo" aria-hidden="true">三</span><div class="brand-text">三件事<small>把事情拆小，<br>一件件完成</small></div></div>
+      <nav class="navigation" aria-label="主要页面">
+        <button type="button" data-page="today" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>今日计划</button>
+        <button type="button" data-page="projects"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path></svg>我的项目</button>
+        <button type="button" data-page="calendar"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M7 2v6m10-6v6M3 11h18m-13 4h1m3 0h1m3 0h1m-9 3h1m3 0h1"></path></svg>日历</button>
+        <div class="navigation-more" id="navigation-more">
+          <button type="button" id="other-features-toggle" aria-expanded="false" aria-controls="other-features-popover"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>其他功能</button>
+          <div class="other-features-popover" id="other-features-popover" role="group" aria-label="其他功能" hidden>
+            <button type="button" data-page="all"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m3 6 2 2 3-4m4 2h9M3 13l2 2 3-4m4 2h9M3 20l2 2 3-4m4 2h9"></path></svg>全部任务</button>
+            <button type="button" data-page="notebook"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm3 0v18M2 7h4m-4 5h4m-4 5h4m6-9h5m-5 4h5"></path></svg>速写本</button>
+            <button type="button" data-page="routine"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21 13.1A9 9 0 0 1 10.9 3a9 9 0 1 0 10.1 10.1Z"></path></svg>今日作息</button>
+          </div>
+        </div>
+      </nav>
+      <div class="sidebar-bottom">
+        <div id="sidebar-status" class="sidebar-status" aria-live="polite"><div>已完成 <strong>0</strong> 项任务</div><div>计划入睡：<strong>未设置</strong></div><div>咖啡 0 · 奶茶 0 · 其他 0 杯</div></div>
+        <button type="button" class="data-button" data-action="open-data"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"></path></svg>备份与数据</button>
+        <span class="local-label">本地试用版 · 数据仅保存在此浏览器</span>
+      </div>
+    </aside>
+    <main id="main" class="main" tabindex="-1" aria-label="当前页面"></main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="modal" class="modal" aria-label="操作窗口"></dialog>
+  <noscript><p class="noscript-notice">请启用浏览器 JavaScript 后使用三件事。此程序不会联网。</p></noscript>
+  <!-- APP_SCRIPTS -->
+</body>
+</html>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 39 39" role="img" aria-labelledby="title description">
+  <title id="title">三件事</title>
+  <desc id="description">现有程序标志：深绿色圆角方形，中央为白色的三。</desc>
+  <rect width="39" height="39" rx="11" fill="#2f634b" />
+  <!-- Outlined from the existing Microsoft YaHei Bold 三 glyph at 23 px;
+       the three native rectangle contours do not depend on an installed font. -->
+  <g fill="#ffffff">
+    <rect x="10.043945" y="10.043945" width="18.822266" height="3.324219" />
+    <rect x="11.054688" y="17.635742" width="16.800781" height="3.234375" />
+    <rect x="8.651367" y="25.631836" width="21.697266" height="3.324219" />
+  </g>
+</svg>

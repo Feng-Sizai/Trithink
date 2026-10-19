@@ -1,0 +1,21 @@
+{
+  "name": "three-things-desktop",
+  "productName": "三件事",
+  "version": "0.4.0",
+  "private": true,
+  "description": "三件事：本地项目管理、速写与作息记录",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder --config electron-builder.cjs --win nsis --x64",
+    "package:dir": "electron-builder --config electron-builder.cjs --win --x64 --dir"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "44.8.0",
+    "electron-builder": "26.15.3"
+  }
+}

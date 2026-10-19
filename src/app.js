@@ -1,0 +1,311 @@
+/* Application entry: DOM events, daily rollover and initial rendering.
+ * Built in the shared private application scope; see build.config.cjs.
+ */
+document.addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button || button.disabled) return;
+  if (button.dataset.page) {
+    if (!captureNotebook()) return;
+    const result = save();
+    if (!result.ok) return;
+    const fromOtherFeatures = otherFeaturesPopover.contains(button);
+    closeOtherFeatures();
+    boot = false;
+    page = button.dataset.page;
+    showQueue = false;
+    render();
+    if (fromOtherFeatures) main.focus({ preventScroll: true });
+    return;
+  }
+  const action = button.dataset.action,
+    id = button.dataset.id;
+  if (!action) return;
+  if (calendarClick(button)) return;
+  if (action === 'set-plan-mode') changePlanMode(button.dataset.mode);
+  if (action === 'choose-today') {
+    showDone = false;
+    page = 'all';
+    render();
+  }
+  if (action === 'toggle-manual') changeManualTask(id, !plan().manualSelected.includes(id));
+  if (action === 'manual-remove') changeManualTask(id, false);
+  if (action === 'start-demo' || action === 'start-blank') {
+    model = action === 'start-demo' ? C.sampleModel() : C.blankModel();
+    boot = false;
+    page = action === 'start-demo' ? 'today' : 'projects';
+    save();
+    render();
+  }
+  if (action === 'new-project') editForm('project', null);
+  if (action === 'edit-project') editForm('project', id);
+  if (action === 'open-project') {
+    activeProject = id;
+    page = 'detail';
+    render();
+  }
+  if (action === 'new-stage') {
+    activeProject = id;
+    editForm('stage', null);
+  }
+  if (action === 'edit-stage') editForm('stage', id);
+  if (action === 'new-task') addTask(id);
+  if (action === 'edit-task') {
+    const t = findLeaf(id);
+    editForm(t?.isProject ? 'project' : t?.isStage ? 'stage' : 'task', id);
+  }
+  if (action === 'delete-item') confirmDelete(button.dataset.kind, id);
+  if (action === 'close-modal') closeModal();
+  if (action === 'move-stage') {
+    const g = stageById(id);
+    const i = g.project.stages.indexOf(g.stage),
+      j = i + (button.dataset.direction === 'up' ? -1 : 1);
+    if (j >= 0 && j < g.project.stages.length) {
+      [g.project.stages[i], g.project.stages[j]] = [g.project.stages[j], g.project.stages[i]];
+      save('子阶段顺序已调整。');
+      render();
+    }
+  }
+  if (action === 'add-today' || action === 'remove-today') changeToday(id, action === 'add-today');
+  if (action === 'complete' || action === 'undo-complete') complete(id, action === 'complete');
+  if (action === 'next') {
+    refreshVisible();
+    save();
+    render();
+  }
+  if (action === 'toggle-queue') {
+    showQueue = !showQueue;
+    render();
+  }
+  if (action === 'toggle-done') {
+    showDone = !showDone;
+    render();
+  }
+  if (action === 'show-completed') {
+    showDone = true;
+    page = 'all';
+    render();
+  }
+  if (action === 'note-save') saveNote();
+  if (action === 'note-new') newNote();
+  if (action === 'note-history') {
+    if (!captureNotebook()) return;
+    const result = save();
+    if (!result.ok) return;
+    destroyEditor(false);
+    page = 'note-history';
+    render();
+  }
+  if (action === 'note-back-editor') {
+    page = 'notebook';
+    render();
+  }
+  if (action === 'open-note') {
+    if (!noteEntry(id)) return;
+    model.notebook.activeEntryId = id;
+    save();
+    page = 'notebook';
+    render();
+  }
+  if (action === 'toggle-note-pin') {
+    C.toggleNotebookPin(model, id);
+    save();
+    render();
+  }
+  if (action === 'delete-note') {
+    const entry = noteEntry(id);
+    if (!entry) return;
+    openModal('删除速写', `<p>删除“${esc(noteText(entry.html).title)}”？</p><p class="muted small">只删除这一条速写，其他记录与草稿会保留。</p>`, 'note-delete', {
+      id
+    });
+  }
+  if (action === 'add-drink') {
+    const d = drinks.find(d => d.id === button.dataset.kind);
+    openModal('确认记录饮品', `<p class="muted small">记录日期：${esc(button.dataset.date || today)}</p><p>是否记录新摄入一杯${d.id === 'other' ? '其他饮品' : d.name}？</p><p class="danger">确认后不可取消。</p>`, 'confirm-drink', {
+      id: d.id,
+      date: C.isDate(button.dataset.date) ? button.dataset.date : today
+    });
+  }
+  if (action === 'open-data') showData();
+  if (action === 'export-data') downloadBackup();
+  if (action === 'choose-import') $('#backup-file', modal).click();
+});
+document.addEventListener('submit', event => {
+  if (event.target.id === 'sleep-form' || event.target.id === 'calendar-sleep-form') {
+    event.preventDefault();
+    const value = new FormData(event.target).get('sleepTime');
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return;
+    K.saveSleep(model, event.target.dataset.date || today, value);
+    save(`计划入睡时间已保存为 ${value}。`);
+    render();
+    return;
+  }
+  if (event.target.id !== 'modal-form') return;
+  event.preventDefault();
+  const data = new FormData(event.target),
+    action = modalAction,
+    context = modalContext;
+  if (!action) return;
+  try {
+    if (calendarSubmit(action, context, data)) return;
+    if (action === 'save-item') {
+      const title = String(data.get('title') || '').trim();
+      if (!title) throw new Error('请填写名称。');
+      const priority = data.get('priority') ? Number(data.get('priority')) : null,
+        due = data.get('due') || null;
+      if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) throw new Error('请选择有效的截止日期。');
+      if (context.kind === 'project') {
+        if (context.id) Object.assign(projectById(context.id), {
+          title,
+          priority,
+          due,
+          importance: Number(data.get('importance'))
+        });else {
+          const p = {
+            id: C.newId('p'),
+            title,
+            priority,
+            due,
+            importance: Number(data.get('importance')),
+            done: false,
+            stages: []
+          };
+          model.projects.push(p);
+          activeProject = p.id;
+          page = 'detail';
+        }
+      }
+      if (context.kind === 'stage') {
+        if (context.id) Object.assign(stageById(context.id).stage, {
+          title,
+          priority,
+          due
+        });else {
+          const project = projectById(context.projectId),
+            wasLeaf = !project.stages.length,
+            stage = {
+              id: C.newId('s'),
+              title,
+              priority,
+              due,
+              done: false,
+              tasks: []
+            };
+          project.stages.push(stage);
+          project.done = false;
+          if (wasLeaf) {
+            for (const p of Object.values(model.plans)) {
+              p.selected = p.selected.map(x => x === project.id ? stage.id : x);
+              p.visible = p.visible.map(x => x === project.id ? stage.id : x);
+            }
+          }
+        }
+      }
+      if (context.kind === 'task') {
+        if (context.id) Object.assign(recordById(context.id).record, {
+          title,
+          priority,
+          due
+        });else {
+          const g = stageById(context.stageId),
+            wasLeaf = !g.stage.tasks.length,
+            t = {
+              id: C.newId('t'),
+              title,
+              priority,
+              due,
+              done: false
+            };
+          g.stage.tasks.push(t);
+          g.stage.done = false;
+          if (wasLeaf) {
+            for (const p of Object.values(model.plans)) {
+              p.selected = p.selected.map(x => x === g.stage.id ? t.id : x);
+              p.visible = p.visible.map(x => x === g.stage.id ? t.id : x);
+            }
+          }
+        }
+      }
+      if (!hasFinishedCard()) refreshVisible();
+    }
+    if (action === 'delete-item') {
+      if (context.kind === 'project') model.projects = model.projects.filter(p => p.id !== context.id);
+      if (context.kind === 'stage') {
+        const g = stageById(context.id);
+        g.project.stages = g.project.stages.filter(s => s.id !== context.id);
+      }
+      if (context.kind === 'task') {
+        const g = recordById(context.id);
+        g.stage.tasks = g.stage.tasks.filter(t => t.id !== context.id);
+      }
+    }
+    if (action === 'confirm-drink') {
+      K.addDrink(model, context.date, context.id);
+    }
+    if (action === 'note-delete') {
+      C.deleteNotebookEntry(model, context.id);
+      page = 'note-history';
+    }
+    if (action === 'import-data') {
+      destroyEditor(false);
+      model = context.model;
+      activeProject = null;
+      page = 'projects';
+      boot = false;
+    }
+    // Prevent a rapid second activation from committing the same confirmation twice.
+    modalAction = null;
+    modalContext = null;
+    modal.close();
+    save(action === 'confirm-drink' ? '饮品已记录。' : '已保存。');
+    render();
+  } catch (error) {
+    $('#form-error', modal).textContent = error.message || '无法保存，请检查输入。';
+  }
+});
+document.addEventListener('change', async event => {
+  if (event.target.id === 'calendar-month') {
+    if (/^(?!000[01])\d{4}-\d{2}$/.test(event.target.value) && C.isDate(event.target.value + '-01') && event.target.value < '9999-01') {
+      calendarMonth = event.target.value;
+      render();
+    }
+    return;
+  }
+  if (event.target.id === 'calendar-destination' || event.target.name === 'projectId') {
+    updateSyncFields();
+    return;
+  }
+  if (event.target.id !== 'backup-file') return;
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    if (file.size > C.LIMITS.json * 4) throw new Error('备份文件过大。');
+    const next = S.importJSON(await file.text());
+    closeModal();
+    openModal('确认导入备份', `<p>备份包含 ${next.projects.length} 个项目。确认后将替换当前全部数据。</p><p class="muted small">如需保留当前内容，请先取消并导出备份。</p>`, 'import-data', {
+      model: next
+    });
+  } catch (error) {
+    toast(error.message || '无法读取此备份文件。', true);
+    event.target.value = '';
+  }
+});
+modal.addEventListener('cancel', () => {
+  modalAction = null;
+  modalContext = null;
+});
+window.addEventListener('beforeunload', () => {
+  if (captureNotebook()) save();
+});
+setInterval(() => {
+  const next = C.localDate();
+  if (next !== today) {
+    if (!captureNotebook()) return;
+    today = next;
+    save();
+    render();
+    toast('新的一天开始了，请重新选择今日任务。');
+  }
+}, 60000);
+render();
+if (calendarPreview && loaded.isNew) save();
+if (loaded.recovered) toast('已从本机上一份有效备份恢复数据。建议导出一份备份。');else if (loaded.error) toast(loaded.error, true);
