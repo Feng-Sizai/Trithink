@@ -35,6 +35,8 @@ let showDone = false;
 let boot = Boolean(loaded.isNew) && !calendarPreview;
 const labels = ['低', '中', '高'];
 const priorityLabels = ['日常', '普通', '重要', '极重要'];
+let automaticOrder = '';
+const automaticSortDescription = '不足1天优先 > 三星 > 剩余1～2天 > 其余按星级；同星级截止更早优先';
 const sortDescription = '重要程度（星级）>截止时间';
 const drinks = [{
   id: 'coffee',

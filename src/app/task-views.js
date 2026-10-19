@@ -56,7 +56,7 @@ function taskRow(t, detail = false) {
 }
 function pendingToday() {
   const selected = new Set(plan().selected);
-  return C.sortTasks(flat().filter(t => selected.has(t.id) && !t.done));
+  return C.sortAutomaticTasks(flat().filter(t => selected.has(t.id) && !t.done));
 }
 function refreshVisible() {
   if (manualMode()) return;
@@ -75,8 +75,10 @@ function renderToday() {
     ids = manual ? p.manualSelected : p.selected,
     selected = leaves.filter(t => ids.includes(t.id));
   const shown = (manual ? p.manualSelected : p.visible).map(findLeaf).filter(Boolean);
-  const rest = manual ? [] : pendingToday().filter(t => !p.visible.includes(t.id));
-  main.innerHTML = header('今天，从一件开始。', dateHeading(), '<button type="button" class="primary" data-action="choose-today">选择今天的任务</button>') + planModeSwitch() + `<div class="summary"><span>${manual ? '手选' : '今日已选'} ${selected.length}${manual ? ' / 3' : ''} 项 · 已完成 ${selected.filter(t => t.done).length} 项</span><span class="muted small">当前展示 ${shown.length} 项</span></div><p class="muted small">${manual ? '拖拽任务条调整顺序；也可聚焦拖动按钮后按上下键。完成后不会自动补入任务。' : sortDescription}</p>` + (shown.length ? shown.map((t, i) => todayCard(t, i, manual)).join('') : `<div class="card empty"><h2>${manual ? '手选今天要做的三件事' : selected.length ? '今天选的任务已完成' : '今天想先做哪几件？'}</h2><p>${manual ? '从全部任务中选择最多三项，再回来安排执行顺序。' : selected.length ? '可以休息一下，也可以再选一件。' : '先从全部任务中选择，首页只展示最优先的三个。'}</p><button type="button" class="primary" data-action="choose-today">去选择任务</button></div>`) + (rest.length ? `<button type="button" class="queue-toggle" data-action="toggle-queue" aria-expanded="${showQueue}">${showQueue ? '收起其他任务' : '查看其他已选任务'} · ${rest.length} 项</button>${showQueue ? rest.map(t => taskRow(t)).join('') : ''}` : '');
+  const pending = manual ? [] : pendingToday();
+  automaticOrder = pending.map(t => t.id).join(' ');
+  const rest = pending.filter(t => !p.visible.includes(t.id));
+  main.innerHTML = header('今天，从一件开始。', dateHeading(), '<button type="button" class="primary" data-action="choose-today">选择今天的任务</button>') + planModeSwitch() + `<div class="summary"><span>${manual ? '手选' : '今日已选'} ${selected.length}${manual ? ' / 3' : ''} 项 · 已完成 ${selected.filter(t => t.done).length} 项</span><span class="muted small">当前展示 ${shown.length} 项</span></div><p class="muted small">${manual ? '拖拽任务条调整顺序；也可聚焦拖动按钮后按上下键。完成后不会自动补入任务。' : automaticSortDescription}</p>` + (shown.length ? shown.map((t, i) => todayCard(t, i, manual)).join('') : `<div class="card empty"><h2>${manual ? '手选今天要做的三件事' : selected.length ? '今天选的任务已完成' : '今天想先做哪几件？'}</h2><p>${manual ? '从全部任务中选择最多三项，再回来安排执行顺序。' : selected.length ? '可以休息一下，也可以再选一件。' : '先从全部任务中选择，首页只展示最优先的三个。'}</p><button type="button" class="primary" data-action="choose-today">去选择任务</button></div>`) + (rest.length ? `<button type="button" class="queue-toggle" data-action="toggle-queue" aria-expanded="${showQueue}">${showQueue ? '收起其他任务' : '查看其他已选任务'} · ${rest.length} 项</button>${showQueue ? rest.map(t => taskRow(t)).join('') : ''}` : '');
 }
 function todayCard(t, i, manual) {
   const handle = manual ? `<button type="button" class="task-drag-handle" draggable="true" data-drag-id="${t.id}" aria-label="调整${esc(t.title)}的顺序，按上下键移动" title="拖动调整顺序，也可使用上下键"><svg aria-hidden="true" viewBox="0 0 16 20"><circle cx="5" cy="4" r="1.4"/><circle cx="11" cy="4" r="1.4"/><circle cx="5" cy="10" r="1.4"/><circle cx="11" cy="10" r="1.4"/><circle cx="5" cy="16" r="1.4"/><circle cx="11" cy="16" r="1.4"/></svg></button>` : '';

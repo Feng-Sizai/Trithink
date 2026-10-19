@@ -281,10 +281,10 @@ test('a project without stages is an executable leaf with its own completion sta
 test('automatic projects compete with manually selected tasks by normal priority rules', () => {
   const model = Core.sampleModel('2026-10-17');
   model.projects.push(emptyProject('p_first', 3, 3), emptyProject('p_later', 1, 1));
-  const plan = Core.syncAutoProjects(model, '2026-10-17');
+  const plan = Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
   assert.deepEqual(plan.selected, ['t_exercises', 't_derivative', 's_proposal', 'p_first', 'p_later']);
   assert.deepEqual(plan.visible, ['t_exercises', 'p_first', 's_proposal']);
-  Core.syncAutoProjects(model, '2026-10-17');
+  Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
   assert.equal(plan.selected.filter(id => id === 'p_first').length, 1);
 });
 test('automatic empty projects use stars then deadlines against selected tasks', () => {
@@ -321,7 +321,7 @@ test('automatic empty projects use stars then deadlines against selected tasks',
     visible: ['t_later', 't_earlier'],
     excludedProjects: []
   };
-  const plan = Core.syncAutoProjects(model, '2026-10-17');
+  const plan = Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
   const selected = new Set(plan.selected);
   assert.deepEqual(Core.sortTasks(Core.flattenTasks(model).filter(task => selected.has(task.id))).map(task => task.id), ['p_auto3', 't_earlier', 't_later', 'p_auto2high', 'p_auto2low', 'p_auto1']);
   assert.deepEqual(plan.visible, ['p_auto3', 't_earlier', 't_later']);
@@ -345,11 +345,11 @@ test('completed visible cards wait for explicit continuation while automatic pro
   model.projects[0].stages[0].tasks[1].done = true;
   model.projects.push(emptyProject('p_new'));
   const originalVisible = model.plans['2026-10-17'].visible.slice();
-  const plan = Core.syncAutoProjects(model, '2026-10-17');
+  const plan = Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
   assert.deepEqual(plan.visible, originalVisible);
   assert.equal(plan.selected.includes('p_new'), true);
   plan.visible = []; // The controller explicitly discards completed cards on Continue.
-  Core.syncAutoProjects(model, '2026-10-17');
+  Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
   assert.equal(plan.visible[0], 'p_new');
   assert.equal(plan.visible.includes('t_exercises'), false);
 });

@@ -438,7 +438,18 @@
   function sortTasks(tasks, by = 'priority') {
     return tasks.slice().sort((a, b) => by === 'due' ? compareDeadlines(a, b) || b.priority - a.priority : b.priority - a.priority || compareDeadlines(a, b));
   }
-  // Flattened leaves retain stage/task order. Equal urgency keeps that order.
+  // Deadline boosts apply only to today's automatic queue. Unspecified times
+  // mean local midnight at the end of the due date. Overdue items stay urgent.
+  function sortAutomaticTasks(tasks, now = new Date()) {
+    const instant = Number(now);
+    const ranked = tasks.map(task => {
+      const remaining = task.due ? new Date(task.due + 'T' + (task.dueTime || '24:00') + ':00').getTime() - instant : Infinity;
+      const boost = remaining < 86400000 ? 4 : remaining < 172800000 ? 2.5 : 0;
+      return { task, rank: Math.max(task.priority, boost) };
+    });
+    return ranked.sort((a, b) => b.rank - a.rank || b.task.priority - a.task.priority || compareDeadlines(a.task, b.task)).map(item => item.task);
+  }
+  // Flattened leaves retain stage/task order. Equal priority keeps that order.
   function projectLeadTask(leaves) {
     let next = null;
     for (const task of leaves) if (!task.done && (!next || task.priority > next.priority)) next = task;
@@ -564,7 +575,7 @@
   }
   // Reconcile only the requested day's plan. Finished visible cards remain until
   // the UI explicitly continues, even when a new automatic project ranks higher.
-  function syncAutoProjects(model, date) {
+  function syncAutoProjects(model, date, now = new Date()) {
     const plan = getPlan(model, date);
     const leaves = flattenTasks(model);
     const byId = new Map(leaves.map(task => [task.id, task]));
@@ -584,7 +595,7 @@
     }
     plan.visible = [...new Set(plan.visible)].filter(id => selected.has(id)).slice(0, 3);
     if (!plan.visible.some(id => byId.get(id).done)) {
-      plan.visible = sortTasks(leaves.filter(task => selected.has(task.id) && !task.done)).slice(0, 3).map(task => task.id);
+      plan.visible = sortAutomaticTasks(leaves.filter(task => selected.has(task.id) && !task.done), now).slice(0, 3).map(task => task.id);
     }
     return plan;
   }
@@ -791,6 +802,7 @@
     sortedNotebookEntries,
     flattenTasks,
     sortTasks,
+    sortAutomaticTasks,
     effectiveDeadline,
     compareDeadlines,
     projectLeadTask,

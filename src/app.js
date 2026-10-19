@@ -328,6 +328,13 @@ modal.addEventListener('cancel', () => {
 window.addEventListener('beforeunload', () => {
   if (captureNotebook()) save(undefined, { recordUndo: false });
 });
+function refreshAutomaticOrder() {
+  if (boot || page !== 'today' || modal.open || manualMode()) return;
+  if (pendingToday().map(t => t.id).join(' ') === automaticOrder) return;
+  render();
+  save(undefined, { recordUndo: false });
+}
+window.addEventListener('focus', refreshAutomaticOrder);
 setInterval(() => {
   const next = C.localDate();
   if (next !== today) {
@@ -336,6 +343,8 @@ setInterval(() => {
     save(undefined, { recordUndo: false });
     render();
     toast('新的一天开始了，请重新选择今日任务。');
+  } else {
+    refreshAutomaticOrder();
   }
 }, 60000);
 if (window.ThreeThingsDesktop) $('.local-label').textContent = '本机保存 · 每次修改自动备份';
