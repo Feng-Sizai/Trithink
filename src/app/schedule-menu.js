@@ -35,7 +35,7 @@ function openScheduleMenu(card, x, y) {
 function openProjectContextMenu(card, x, y) {
   const project = projectById(card.dataset.projectId);
   if (!project) return;
-  const content = '<button type="button" role="menuitem" data-action="edit-project" data-id="' + project.id + '">编辑项目</button><button type="button" role="menuitem" data-action="delete-item" data-kind="project" data-id="' + project.id + '">删除</button>';
+  const content = '<button type="button" role="menuitem" data-action="edit-project" data-id="' + project.id + '">编辑项目</button><button type="button" role="menuitem" data-action="complete-project" data-id="' + project.id + '">标记为已完成</button><button type="button" role="menuitem" data-action="delete-item" data-kind="project" data-id="' + project.id + '">删除</button>';
   openAppContextMenu(card, '项目操作：' + project.title, content, x, y);
 }
 function openTodayContextMenu(card, x, y) {
@@ -74,6 +74,7 @@ function calendarRepeatOptions() {
   const form = $('#modal-form');
   const interval = $('[name="repeatInterval"]', form).value;
   return {
+    skipDuplicates: $('[name="repeatSkipDuplicates"]', form).checked,
     interval: interval === 'custom' ? Number($('[name="repeatDays"]', form).value) : Number(interval),
     mode: $('[name="repeatStop"]', form).value,
     count: Number($('[name="repeatCount"]', form).value),
@@ -83,7 +84,7 @@ function calendarRepeatOptions() {
 function calendarRepeatForm(id) {
   const event = model.calendarEvents.find(item => item.id === id);
   if (!event) return;
-  openModal('同步到未来', '<p>以“' + esc(event.title) + '”的 ' + esc(event.date) + ' 为起点，添加未来日程。</p><div class="form-grid"><label class="field">同步间隔<select name="repeatInterval"><option value="1">每天重复</option><option value="7">每周重复</option><option value="custom">自定义天数</option></select></label><label class="field" id="repeat-days-field" hidden>间隔天数<input type="number" name="repeatDays" value="2" min="1" max="36500" step="1"></label><label class="field wide">重复至<select name="repeatStop"><option value="count">指定新增次数</option><option value="until">指定截止日期</option></select></label><label class="field" id="repeat-count-field">重复次数（不含当前日程）<input type="number" name="repeatCount" value="5" min="1" max="10000" step="1"></label><label class="field" id="repeat-until-field" hidden>重复截止日期（含当天）<input type="date" name="repeatUntil" min="' + event.date + '" max="9999-12-31"></label></div><div class="repeat-preview" id="repeat-preview" role="status" aria-live="polite"></div><p class="muted small">保留原来的时间、备注和颜色。新增日程独立保存，不自动添加到项目；修改或删除其中一条不会影响其他日程。</p>', 'calendar-confirm-repeat', { id });
+  openModal('同步到未来', '<p>以“' + esc(event.title) + '”的 ' + esc(event.date) + ' 为起点，添加未来日程。</p><div class="form-grid"><label class="field">同步间隔<select name="repeatInterval"><option value="1">每天重复</option><option value="7">每周重复</option><option value="custom">自定义天数</option></select></label><label class="field" id="repeat-days-field" hidden>间隔天数<input type="number" name="repeatDays" value="2" min="1" max="36500" step="1"></label><label class="field wide">重复至<select name="repeatStop"><option value="count">指定新增次数</option><option value="until">指定截止日期</option></select></label><label class="field" id="repeat-count-field">重复次数（不含当前日程）<input type="number" name="repeatCount" value="5" min="1" max="10000" step="1"></label><label class="field" id="repeat-until-field" hidden>重复截止日期（含当天）<input type="date" name="repeatUntil" min="' + event.date + '" max="9999-12-31"></label></div><label class="repeat-deduplicate"><input type="checkbox" name="repeatSkipDuplicates" checked>跳过同名、同日期、同时段的已有日程（推荐）</label><div class="repeat-preview" id="repeat-preview" role="status" aria-live="polite"></div><p class="muted small">保留原来的时间、备注和颜色。新增日程独立保存，不自动添加到项目；修改或删除其中一条不会影响其他日程。</p>', 'calendar-confirm-repeat', { id });
   updateCalendarRepeat();
 }
 function updateCalendarRepeat() {
@@ -101,11 +102,14 @@ function updateCalendarRepeat() {
   try {
     const event = model.calendarEvents.find(item => item.id === modalContext.id);
     if (!event) throw new Error('原日程已不存在');
-    const dates = K.repeatDates(event, calendarRepeatOptions());
+    const result = K.repeatPreview(model, event.id, calendarRepeatOptions());
+    const dates = result.addedDates;
     if (dates.length + model.calendarEvents.length > C.LIMITS.calendarEvents) throw new Error('日程总数将超过 10000 条，请减少重复次数');
-    preview.textContent = '将新增 ' + dates.length + ' 条日程：' + dates[0] + ' 至 ' + dates[dates.length - 1] + '。';
+    preview.textContent = (dates.length ? '将新增 ' + dates.length + ' 条日程：' + dates[0] + ' 至 ' + dates[dates.length - 1] + '。' : '符合条件的日程均已存在，无需新增。') + (result.duplicateDates.length ? ' 检测到 ' + result.duplicateDates.length + ' 个重复日期，' + (calendarRepeatOptions().skipDuplicates ? '将跳过。' : '将重复添加。') : '');
+    $('[type="submit"]', form).disabled = dates.length === 0;
     preview.classList.remove('is-error');
   } catch (error) {
+    $('[type="submit"]', form).disabled = true;
     preview.textContent = error.message;
     preview.classList.add('is-error');
   }
@@ -150,7 +154,10 @@ window.addEventListener('resize', () => closeScheduleMenu());
 window.addEventListener('blur', () => closeScheduleMenu());
 
 document.addEventListener('keydown', event => {
-  const card = event.target.closest('.task-card[data-card-id]');
+  const card = event.target.closest('.task-card[data-card-id], .project-card[data-project-id]');
   if (!card || event.target !== card || modal.open || scheduleMenu) return;
-  if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTodayProject(card.dataset.cardId); }
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    if (card.dataset.projectId) openProjectDetail(card.dataset.projectId);else openTodayProject(card.dataset.cardId);
+  }
 });

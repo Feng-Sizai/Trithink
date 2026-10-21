@@ -45,7 +45,7 @@ test('automatic visible cards use inherited deadline pairs and respond to time p
   assert.deepEqual(p.visible, ['stage', 'three', 'two']);
 });
 
-test('automatic updates preserve manual choices and completed visible cards', () => {
+test('automatic updates preserve manual choices while refilling the automatic display', () => {
   const m = C.blankModel();
   m.projects = [task('three', 3), task('short', 0, '2026-10-20', '06:00')];
   const p = C.getPlan(m, '2026-10-19');
@@ -54,5 +54,6 @@ test('automatic updates preserve manual choices and completed visible cards', ()
   assert.deepEqual(p.manualSelected, ['three', 'short']);
   p.visible = ['three']; m.projects[0].done = true;
   C.syncAutoProjects(m, '2026-10-19', now);
-  assert.deepEqual(p.visible, ['three']);
+  assert.deepEqual(p.visible, ['short']);
+  assert.deepEqual(p.manualSelected, ['three', 'short']);
 });

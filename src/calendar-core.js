@@ -3,7 +3,7 @@
   'use strict';
 
   const C = typeof module !== 'undefined' && module.exports ? require('./core.js') : root.ThreeThingsCore;
-  const kinds = ['coffee', 'milkTea', 'other'];
+  const kinds = ['coffee', 'milkTea', 'other', 'water'];
   const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
   function assert(value, message) {
     if (!value) throw new Error(message);
@@ -75,8 +75,8 @@
     return saveEvent(model, { title: event.title, date, priority: event.priority, startTime: minuteTime(range.start), endTime: minuteTime(range.end) }, id);
   }
   // Connected overlap groups share columns; touching endpoints do not overlap.
-  function scheduleLayout(events) {
-    const timed = events.filter(event => event.startTime && event.endTime).map(event => ({ event, start: timeMinutes(event.startTime), end: timeMinutes(event.endTime) })).sort((a, b) => a.start - b.start || b.end - a.end || a.event.id.localeCompare(b.event.id));
+  function scheduleLayout(events, minimumMinutes = 0) {
+    const timed = events.filter(event => event.startTime && event.endTime).map(event => ({ event, start: timeMinutes(event.startTime), end: timeMinutes(event.endTime), layoutEnd: Math.max(timeMinutes(event.endTime), timeMinutes(event.startTime) + minimumMinutes) })).sort((a, b) => a.start - b.start || b.end - a.end || a.event.id.localeCompare(b.event.id));
     const result = [];
     let group = [], ends = [], groupEnd = -1;
     function flush() {
@@ -87,9 +87,9 @@
       if (item.start >= groupEnd) flush();
       let column = ends.findIndex(end => end <= item.start);
       if (column < 0) column = ends.length;
-      ends[column] = item.end;
+      ends[column] = item.layoutEnd;
       group.push({ ...item, column });
-      groupEnd = group.length === 1 ? item.end : Math.max(groupEnd, item.end);
+      groupEnd = group.length === 1 ? item.layoutEnd : Math.max(groupEnd, item.layoutEnd);
     }
     flush();
     return result;
@@ -124,8 +124,14 @@
   function addDrink(model, date, kind) {
     assert(C.isDate(date) && kinds.includes(kind), '饮品记录无效');
     const routine = C.getRoutine(model, date);
+    if (kind === 'water' && routine.drinks.water === undefined) routine.drinks.water = 0;
     assert(routine.drinks[kind] < 10000, '当天杯数已达记录上限');
     routine.drinks[kind] += 1;
+  }
+  function setDrinkCount(model, date, kind, count) {
+    assert(C.isDate(date) && kinds.includes(kind), '饮品记录无效');
+    assert(Number.isInteger(count) && count >= 0 && count <= 10000, '杯数应为0至10000的整数');
+    C.getRoutine(model, date).drinks[kind] = count;
   }
   function findTarget(model, id) {
     for (const project of model.projects) {
@@ -162,13 +168,21 @@
     const candidate = { ...model, calendarEvents: model.calendarEvents.filter(item => item.id !== id).concat(next) };
     const clean = C.validateModel(candidate).calendarEvents.find(item => item.id === next.id);
     const target = clean.targetId ? findTarget(model, clean.targetId) : null;
-    if (target) Object.assign(target.record, { title: clean.title, priority: clean.priority, due: clean.date, dueTime: clean.endTime === '24:00' ? null : clean.endTime });
+    if (target && existing) {
+      // A note/color edit must not overwrite separately edited project fields.
+      if (clean.title !== existing.title) target.record.title = clean.title;
+      if (clean.priority !== existing.priority) target.record.priority = clean.priority;
+      if (clean.date !== existing.date || clean.endTime !== existing.endTime) {
+        target.record.due = clean.date;
+        target.record.dueTime = clean.endTime === '24:00' ? null : clean.endTime;
+      }
+    }
     if (existing) Object.assign(existing, clean);else model.calendarEvents.push(clean);
     return existing || clean;
   }
   function replaceLeafInPlans(model, previous, next) {
     for (const plan of Object.values(model.plans)) {
-      for (const key of ['selected', 'visible', 'manualSelected']) {
+      for (const key of ['selected', 'visible', 'manualSelected', 'manualOrder', 'deferred']) {
         if (Array.isArray(plan[key])) plan[key] = plan[key].map(id => id === previous ? next : id);
       }
     }
@@ -244,9 +258,16 @@
     }
     return Array.from({ length: count }, (_, i) => shiftDate(event.date, interval * (i + 1)));
   }
-  function repeatEvent(model, id, options, now = new Date().toISOString()) {
+  function repeatPreview(model, id, options) {
     const event = eventById(model, id);
     const dates = repeatDates(event, options);
+    const duplicates = new Set(model.calendarEvents.filter(other => other.title === event.title && other.startTime === event.startTime && other.endTime === event.endTime).map(other => other.date));
+    const duplicateDates = dates.filter(date => duplicates.has(date));
+    return { dates, duplicateDates, addedDates: options.skipDuplicates === false ? dates : dates.filter(date => !duplicates.has(date)) };
+  }
+  function repeatEvent(model, id, options, now = new Date().toISOString()) {
+    const event = eventById(model, id);
+    const dates = repeatPreview(model, id, options).addedDates;
     assert(model.calendarEvents.length + dates.length <= C.LIMITS.calendarEvents, '日程总数将超过 10000 条，请减少重复次数');
     const copies = dates.map(date => ({ ...event, id: C.newId('event'), date, targetId: null, createdAt: now, updatedAt: now }));
     // Batch validation keeps an invalid range or capacity error fully atomic.
@@ -267,7 +288,7 @@
     saveEvent(model, { title: '本周读书分享', date: today, priority: 1 });
     return C.validateModel(model);
   }
-  const api = Object.freeze({ shiftDate, monthDays, weekDays, timeMinutes, SCHEDULE, minuteTime, scheduleMinute, scheduleCreateRange, scheduleRange, scheduleMoveRange, rescheduleEvent, scheduleLayout, meanBedtime, statistics, saveSleep, addDrink, findTarget, saveEvent, syncEvent, deleteTarget, deleteEvent, removeEventFromProject, repeatDates, repeatEvent, sampleModel });
+  const api = Object.freeze({ shiftDate, monthDays, weekDays, timeMinutes, SCHEDULE, minuteTime, scheduleMinute, scheduleCreateRange, scheduleRange, scheduleMoveRange, rescheduleEvent, scheduleLayout, meanBedtime, statistics, saveSleep, addDrink, setDrinkCount, findTarget, saveEvent, syncEvent, deleteTarget, deleteEvent, removeEventFromProject, repeatDates, repeatPreview, repeatEvent, sampleModel });
   root.ThreeThingsCalendar = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

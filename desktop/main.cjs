@@ -7,7 +7,8 @@ const {
   Menu,
   protocol,
   session,
-  ipcMain
+  ipcMain,
+  screen
 } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -41,10 +42,13 @@ protocol.registerSchemesAsPrivileged([{
     secure: true
   }
 }]);
+const windowState = require('./window-state.cjs').createWindowStateStore(path.join(userData, 'window-state.json'));
 function createWindow() {
+  const previous = windowState.load(screen?.getAllDisplays() || []);
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
+    ...(previous?.bounds || {}),
     minWidth: 480,
     minHeight: 600,
     title: "三件事",
@@ -62,6 +66,13 @@ function createWindow() {
       spellcheck: false
     }
   });
+  if (previous?.maximized) mainWindow.maximize();
+  let stateTimer = null;
+  const saveState = () => windowState.save(mainWindow.getNormalBounds(), mainWindow.isMaximized());
+  const scheduleState = () => { clearTimeout(stateTimer); stateTimer = setTimeout(saveState, 200); };
+  mainWindow.on('resize', scheduleState);
+  mainWindow.on('move', scheduleState);
+  mainWindow.on('close', () => { clearTimeout(stateTimer); saveState(); });
   mainWindow.webContents.setWindowOpenHandler(() => ({
     action: "deny"
   }));
@@ -93,8 +104,11 @@ if (!app.requestSingleInstanceLock()) {
   app.on("window-all-closed", () => app.quit());
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
+    const autoDirectory = path.join(userData, 'auto-backups');
+    fs.mkdirSync(autoDirectory, { recursive: true });
     backupStore = require('./local-backup.cjs').createBackupStore({
-      directory: path.join(userData, 'auto-backups'),
+      directory: autoDirectory,
+      manualDirectory: path.join(path.dirname(fs.realpathSync(autoDirectory)), 'manual-backups'),
       Core: require('./app/core.cjs')
     });
     function trusted(event) {
@@ -105,6 +119,9 @@ if (!app.requestSingleInstanceLock()) {
     });
     ipcMain.on('three-things:data-save', (event, json) => {
       event.returnValue = trusted(event) ? backupStore.save(json) : { ok: false, persistent: false, error: '无效的数据保存来源' };
+    });
+    ipcMain.on('three-things:manual-backup', (event, json) => {
+      event.returnValue = trusted(event) ? backupStore.manualBackup(json) : { ok: false, error: '无效的手动备份来源' };
     });
     session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => callback(false));
     session.defaultSession.setPermissionCheckHandler(() => false);

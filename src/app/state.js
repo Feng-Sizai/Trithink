@@ -18,11 +18,14 @@ const loaded = S.load();
 let model = loaded.model || C.blankModel();
 let today = C.localDate();
 if (calendarPreview && loaded.isNew) model = K.sampleModel(today);
-let page = calendarPreview ? 'calendar' : 'today';
-let calendarMonth = today.slice(0, 7);
-let calendarDay = today;
-let calendarView = 'month';
-let activeProject = null;
+let recoveryNoticeVisible = Boolean(loaded.recovered);
+const previousView = model.viewState;
+let restoringView = true;
+let page = calendarPreview ? 'calendar' : previousView?.page || 'today';
+let calendarMonth = previousView?.calendarMonth || today.slice(0, 7);
+let calendarDay = previousView?.calendarDay || today;
+let calendarView = 'week';
+let activeProject = previousView?.activeProject || null;
 let editor = null;
 let editorNoteId = null;
 let noteTimer = null;
@@ -30,13 +33,14 @@ let modalAction = null;
 let modalContext = null;
 let memoryOnly = !loaded.persistent;
 let lastGood = C.validateModel(model);
-let showQueue = false;
-let showDone = false;
+let showQueue = previousView?.showQueue || false;
+let showDone = previousView?.showDone || false;
 let boot = Boolean(loaded.isNew) && !calendarPreview;
 const labels = ['低', '中', '高'];
 const priorityLabels = ['日常', '普通', '重要', '极重要'];
 let automaticOrder = '';
-const automaticSortDescription = '不足1天优先 > 三星 > 剩余1～2天 > 其余按星级；同星级截止更早优先';
+let urgentSignature = '';
+const automaticSortDescription = '不足1天优先 > 三星 > 剩余1～2天 > 其余按星级；同星级截止更早优先。暂缓事项移至队尾，明天恢复参与排序';
 const sortDescription = '重要程度（星级）>截止时间';
 const drinks = [{
   id: 'coffee',
@@ -47,6 +51,9 @@ const drinks = [{
 }, {
   id: 'other',
   name: '其他'
+}, {
+  id: 'water',
+  name: '喝水'
 }];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({
   '&': '&amp;',

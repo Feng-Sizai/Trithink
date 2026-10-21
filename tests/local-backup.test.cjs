@@ -68,3 +68,52 @@ test('desktop storage migrates browser data then survives browser clearing and b
   assert.equal(within(`(()=>{const m=ThreeThingsStorage.load().model;m.projects[0].title='修改资料';return ThreeThingsStorage.save(m).persistent})()`), true);
   assert.equal(JSON.parse(store.load().json).projects[0].title, '修改资料');
 });
+
+test('manual backup always creates a separate validated file and survives automatic history rotation', t => {
+  const { directory, store, change } = harness(t, 2); const text = change('手动备份');
+  const a = store.manualBackup(text), b = store.manualBackup(text);
+  assert(a.ok && b.ok); assert.notEqual(a.file, b.file); assert.equal(JSON.parse(fs.readFileSync(a.file)).projects[0].title, '手动备份');
+  for (let i = 0; i < 5; i++) store.save(change(String(i)));
+  assert(fs.existsSync(a.file)); assert.equal(fs.readdirSync(path.join(directory, 'manual')).length, 2);
+  assert.equal(store.manualBackup('{broken').ok, false); assert.equal(fs.readdirSync(path.join(directory, 'manual')).length, 2);
+});
+test('view-only saves persist the last page and position without crowding data backup history', t => {
+  const { directory, store, change } = harness(t); const m = JSON.parse(change('内容'));
+  store.save(JSON.stringify(m)); const historyCount = fs.readdirSync(path.join(directory, 'history')).length;
+  for (let i = 0; i < 5; i++) { m.viewState = { page: 'calendar', activeProject: null, calendarDay: '2026-10-20', calendarMonth: '2026-10', showQueue: true, showDone: false, scrollY: i * 100 }; assert(store.save(JSON.stringify(m)).ok); }
+  assert.equal(JSON.parse(store.load().json).viewState.scrollY, 400); assert.equal(fs.readdirSync(path.join(directory, 'history')).length, historyCount);
+});
+
+test('startup selects application save revisions, ignores mtime changes and skips broken newer files', t => {
+  const { directory, store, change } = harness(t);
+  store.save(change('旧自动')); const old = store.manualBackup(change('旧手动'));
+  store.save(change('最新自动'));
+  const future = new Date(Date.now() + 86400000);
+  fs.utimesSync(old.file, future, future);
+  let reopened = createBackupStore({ directory, Core: C });
+  assert.equal(JSON.parse(reopened.load().json).projects[0].title, '最新自动');
+  const fresh = reopened.manualBackup(change('最新手动'));
+  assert(fresh.ok);
+  const bad = path.join(directory, 'manual', 'newer-broken.json');
+  fs.writeFileSync(bad, '{broken'); fs.utimesSync(bad, future, future);
+  const result = createBackupStore({ directory, Core: C }).load();
+  assert.equal(JSON.parse(result.json).projects[0].title, '最新手动');
+  assert.equal(result.recovered, true); assert.equal(result.source.kind, '手动备份');
+  assert.equal(result.source.name, path.basename(fresh.file)); assert(result.source.savedAt);
+  assert(reopened.save(change('再次保存')).ok);
+  assert.equal(JSON.parse(createBackupStore({ directory, Core: C }).load().json).projects[0].title, '再次保存');
+});
+test('legacy canonical data is not replaced by touched arbitrary backups and is stamped on first save', t => {
+  const { directory, store, change } = harness(t);
+  fs.mkdirSync(path.join(directory, 'manual'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'latest.json'), change('旧版当前数据'));
+  const old = path.join(directory, 'manual', 'copied-old.json'); fs.writeFileSync(old, change('更旧备份'));
+  const future = new Date(Date.now() + 86400000); fs.utimesSync(old, future, future);
+  assert.equal(JSON.parse(store.load().json).projects[0].title, '旧版当前数据');
+  const saved = store.save(change('升级后修改'));
+  assert(saved.ok); assert(JSON.parse(saved.json).backupMeta.revision > 0);
+  assert.equal(JSON.parse(createBackupStore({ directory, Core: C }).load().json).projects[0].title, '升级后修改');
+});
+test('newer identical manual copies do not report recovery or regress the canonical data', t => {
+  const {directory,store,change}=harness(t);const text=change('同一份');store.save(text);const backup=store.manualBackup(text);const recent=new Date(Date.now()+5000);fs.utimesSync(backup.file,recent,recent);const result=store.load();assert.equal(result.recovered,false);assert.equal(JSON.parse(result.json).projects[0].title,'同一份');
+});

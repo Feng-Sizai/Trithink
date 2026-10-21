@@ -1355,7 +1355,7 @@ progress::-moz-progress-bar {
 
 .drink-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -2016,7 +2016,7 @@ progress::-moz-progress-bar {
 }
 
 /* Project cards expose their interactive surface and keyboard focus. */
-.project-card { cursor: context-menu; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+.project-card { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
 .project-card:hover, .project-card:focus-within { border-color: #9ebda8; box-shadow: 0 8px 24px #254e3712; transform: translateY(-2px); }
 .project-card:focus-visible { outline: 3px solid #78a78b; outline-offset: 3px; }
 .modal-actions .modal-delete { margin-right: auto; }
@@ -2037,3 +2037,70 @@ progress::-moz-progress-bar {
 .deadline-fields legend { margin-bottom: 8px; padding: 0; }
 .deadline-inputs { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; }
 .deadline-inputs input { min-width: 0; width: 100%; }
+
+/* Deadline warning follows the record across project, task and calendar views. */
+.deadline-urgent {
+  --accent: #a52f44;
+  --accent-hover: #842035;
+  --line: #e8b0b8;
+  --soft: #fff0f2;
+  --button-soft: #fbe1e6;
+  --button-soft-border: #e8b0b8;
+  --event-bg: #fbe1e6;
+  --event-ink: #a52f44;
+}
+.task-card.deadline-urgent, .project-card.deadline-urgent, .stage.deadline-urgent, .row.deadline-urgent, .card.deadline-urgent { border-color: #cf6577; background: #fff6f7; }
+.deadline-urgent .stars, .deadline-urgent .text-button, .deadline-urgent .project-open { color: #a52f44; }
+.deadline-urgent .deadline-badge { background: #fbe1e6; color: #a52f44; }
+.deadline-urgent .project-next { border-color: #e8b0b8; }
+.project-card.deadline-urgent:hover, .project-card.deadline-urgent:focus-within { border-color: #a52f44; box-shadow: 0 8px 24px #a52f4420; }
+.deadline-urgent:focus-visible { outline-color: #cf6577; }
+.deadline-urgent .project-open:hover { background: #f5cbd3; }
+
+.manual-picked-task.deadline-urgent { border-color: #cf6577; background: #fbe1e6; color: #a52f44; }
+.deadline-urgent button:hover { border-color: #cf6577; }
+
+@media (max-width: 600px) {
+  .drink-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .drink-card:nth-child(3) { border-left: 0; }
+  .drink-card:nth-child(n+3) { border-top: 1px solid var(--line); }
+}
+
+/* Persistent recovery and draft notices share the existing page flow. */
+.draft-notice, .recovery-notice { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); font-size: 13px; }
+.recovery-notice p { margin: 5px 0 0; overflow-wrap: anywhere; }
+.draft-notice > span { overflow-wrap: anywhere; min-width: 0; }
+.urgent-reason { color: #a52f44; font-size: 13px; line-height: 1.5; margin: 8px 0; }
+.drink-edit { margin-top: 8px; }
+.form-draft-status { line-height: 1.5; }
+
+/* Transparent tutorial rings: two repeating outward waves, without a screen mask. */
+.tutorial-focus-ring { --tutorial-ring: #2563eb; position: fixed; z-index: 80; pointer-events: none; border: 3px solid var(--tutorial-ring); border-radius: 12px; background: transparent; color: var(--tutorial-ring); box-shadow: 0 0 0 2px #ffffffd9; }
+.tutorial-focus-ring::before, .tutorial-focus-ring::after { content: ''; position: absolute; inset: -3px; border: 2px solid currentColor; border-radius: inherit; background: transparent; pointer-events: none; animation: tutorial-ripple 2.4s ease-out infinite; }
+.tutorial-focus-ring::after { animation-delay: -1.2s; }
+@keyframes tutorial-ripple { 0% { inset: -3px; opacity: .8; } 100% { inset: -25px; opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tutorial-focus-ring::before { animation: none; inset: -9px; opacity: .3; } .tutorial-focus-ring::after { display: none; } }
+.tutorial-coach { position: fixed; z-index: 90; width: 328px; max-width: calc(100vw - 24px); padding: 20px; border: 2px solid #78a78b; border-radius: 16px; background: #fff; color: var(--ink); box-shadow: 0 12px 40px #15332535; font-size: 15px; line-height: 1.65; max-height: calc(100dvh - 24px); overflow: auto; }
+.tutorial-coach .tutorial-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--accent); font-size: 12px; }
+.tutorial-coach .tutorial-top button { min-height: 32px; padding: 4px; white-space: nowrap; font-size: 13px; }
+.tutorial-coach h2 { font-size: 20px; padding: 0; margin: 10px 0; }
+.tutorial-coach p { font-size: 15px; margin: 8px 0 14px; }
+.tutorial-coach small { font-size: 11px; margin-top: 12px; }
+.tutorial-example { padding: 12px 14px; background: #edf6ef; border: 1px solid #b4d1bd; border-radius: 10px; margin: 12px 0; overflow-wrap: anywhere; }
+.tutorial-example span { display: block; color: var(--muted); font-size: 12px; }
+.tutorial-example strong { display: block; font-size: 22px; font-weight: 800; color: #205238; line-height: 1.5; margin-top: 4px; }
+.tutorial-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.tutorial-controls:empty { display: none; }
+.tutorial-controls button { font-size: 14px; min-height: 38px; padding: 7px 12px; }
+.tutorial-target { outline: 3px solid #2563eb !important; outline-offset: 4px; scroll-margin: 34px; }
+.modal.tutorial-with-coach::backdrop { background: transparent; backdrop-filter: none; }
+.tutorial-coach.tutorial-inline { position: relative; inset: auto !important; width: 100%; max-width: 100%; max-height: none; margin: 0 0 22px; box-shadow: none; padding: 14px 16px; }
+.tutorial-inline small { display: none; }
+.tutorial-range { position: absolute; left: 6px; right: 6px; z-index: 5; background: #eff6ff; border: 2px dashed #2563eb; border-radius: 6px; pointer-events: none; display: flex; align-items: center; justify-content: center; color: #1d4ed8; font-size: 12px; font-weight: 700; white-space: nowrap; }
+@media print { .tutorial-coach, .tutorial-focus-ring, .tutorial-range, .help-button { display: none !important; } }
+
+/* A discreet, always available help entry in the lower-left corner. */
+.help-button { position: fixed; left: 14px; bottom: 14px; z-index: 50; display: grid; place-items: center; width: 32px; height: 32px; min-height: 32px; padding: 3px; border: 1px solid var(--line); border-radius: 50%; background: var(--panel); color: var(--muted); box-shadow: 0 2px 8px #1533250c; }
+.help-button svg { width: 22px; height: 22px; }
+.help-button:hover { color: var(--accent); border-color: #78a78b; background: var(--soft); }
+@media (min-width: 761px) { .sidebar { padding-bottom: 60px; } }

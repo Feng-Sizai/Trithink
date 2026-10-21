@@ -62,10 +62,17 @@ function cleanPlans() {
     p.selected = [...new Set(p.selected)].filter(id => valid.has(id));
     p.visible = [...new Set(p.visible)].filter(id => valid.has(id) && p.selected.includes(id)).slice(0, 3);
     p.excludedProjects = (p.excludedProjects || []).filter(id => projectLeaves.has(id));
+    p.deferred = [...new Set(p.deferred || [])].filter(id => valid.has(id));
+    p.manualOrder = [...new Set(p.manualOrder || [])].filter(id => valid.has(id));
     p.manualSelected = [...new Set(p.manualSelected || [])].filter(id => valid.has(id)).slice(0, 3);
   }
 }
+function operationContent(value) {
+  return JSON.stringify({ ...value, backupMeta: null, formDraft: null, viewState: null });
+}
 function save(message, { recordUndo = true } = {}) {
+  if (typeof ensureCurrentDay === 'function') ensureCurrentDay();
+  captureViewState();
   C.syncAutoProjects(model, today);
   cleanPlans();
   try {
@@ -89,7 +96,8 @@ function save(message, { recordUndo = true } = {}) {
     toast(result.error || '保存失败，本次修改没有生效。', true);
     return result;
   }
-  if (recordUndo) rememberOperation(before, after);
+  if (recordUndo && operationContent(lastGood) !== operationContent(model)) rememberOperation(before, after);
+  if (result.model) model = C.validateModel(result.model);
   lastGood = C.validateModel(model);
   memoryOnly = !result.persistent;
   updateSidebar();
@@ -98,5 +106,28 @@ function save(message, { recordUndo = true } = {}) {
 }
 function updateSidebar() {
   const r = routine();
-  $('#sidebar-status').innerHTML = `<div>已完成 <strong>${C.completedCount(model)}</strong> 项任务</div><div>计划入睡：<strong>${r.sleepTime || '未设置'}</strong></div><div aria-label="饮品摄入：咖啡${r.drinks.coffee}杯，奶茶${r.drinks.milkTea}杯，其他${r.drinks.other}杯">咖啡${r.drinks.coffee}·奶茶${r.drinks.milkTea}·其他${r.drinks.other}杯</div>`;
+  $('#sidebar-status').innerHTML = `<div>已完成 <strong>${C.completedCount(model)}</strong> 项任务</div><div>计划入睡：<strong>${r.sleepTime || '未设置'}</strong></div><div aria-label="饮品摄入：咖啡${r.drinks.coffee}杯，奶茶${r.drinks.milkTea}杯，其他${r.drinks.other}杯，喝水${r.drinks.water || 0}杯">咖啡${r.drinks.coffee}·奶茶${r.drinks.milkTea}·其他${r.drinks.other}杯 · 喝水${r.drinks.water || 0}杯</div>`;
+}
+
+function captureViewState() {
+  if (typeof page !== 'string' || typeof restoringView !== 'undefined' && restoringView) return;
+  model.viewState = { page, activeProject, calendarMonth, calendarDay, showQueue, showDone, scrollY: Math.max(0, Math.min(10000000, Math.round(window.scrollY))) };
+}
+function persistViewState() {
+  if (boot || restoringView) return;
+  const before = JSON.stringify(model.viewState);
+  captureViewState();
+  if (before !== JSON.stringify(model.viewState)) save(undefined, { recordUndo: false });
+}
+function manualBackupCurrent() {
+  if (!captureNotebook()) return;
+  captureFormDraft();
+  if (!save(undefined, { recordUndo: Boolean(editor) }).ok) return;
+  try {
+    if (!window.ThreeThingsDesktop?.manualBackup) { downloadBackup(); return; }
+    const result = window.ThreeThingsDesktop.manualBackup(S.exportJSON(model));
+    if (!result.ok) throw new Error(result.error || '手动备份失败');
+    tutorialCommitted('backup');
+    toast('已保存手动备份' + (model.formDraft ? '（含未提交草稿，确认后才成为正式记录）' : '') + '：' + result.file);
+  } catch (error) { toast(error.message || '手动备份失败。', true); }
 }

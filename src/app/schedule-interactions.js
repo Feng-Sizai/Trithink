@@ -184,6 +184,7 @@ document.addEventListener('pointerup', event => {
   if (!inside || !gesture.moved || gesture.mode === 'cancelled' || !range) return;
   if (gesture.mode === 'create') {
     calendarEventForm(null, day, K.minuteTime(range.start), K.minuteTime(range.end));
+    tutorialScheduleSelected(day, range);
     return;
   }
   if (range.start === gesture.start && range.end === gesture.end && day === gesture.originalDate) return;

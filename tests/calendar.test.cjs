@@ -38,7 +38,7 @@ test('statistics require all three previous dates, exclude today from sleep and 
   const before = JSON.stringify(model);
   const stats = K.statistics(model, DAY);
   assert.equal(stats.average, '00:20');
-  assert.deepEqual(stats.drinks, { coffee: 1, milkTea: 1, other: 0 });
+  assert.deepEqual(stats.drinks, { coffee: 1, milkTea: 1, other: 0, water: 0 });
   assert.equal(JSON.stringify(model), before, 'reading statistics must not create empty routine records');
 });
 test('backfill preserves other dates and drinks; append operation refuses invalid categories', () => {
@@ -86,9 +86,13 @@ test('synced events can create a stage or a task and retain manual plan slots wh
   const stage = K.syncEvent(model, stageEvent.id, { kind: 'stage', projectId: 'p_math' });
   const plan = C.getPlan(model, DAY);
   plan.manualSelected = [stage.id];
+  plan.manualOrder = [stage.id];
+  plan.deferred = [stage.id];
   const taskEvent = K.saveEvent(model, { title: '新增任务', date: DAY, priority: 3 });
   const task = K.syncEvent(model, taskEvent.id, { kind: 'task', projectId: 'p_math', stageId: stage.id });
   assert.deepEqual(plan.manualSelected, [task.id]);
+  assert.deepEqual(plan.manualOrder, [task.id]);
+  assert.deepEqual(plan.deferred, [task.id]);
   K.saveEvent(model, { title: '阶段更新', date: '2026-10-21', priority: 1 }, stageEvent.id);
   assert.equal(stage.title, '阶段更新');
   assert.equal(task.due, DAY, 'an explicit task date overrides its parent');

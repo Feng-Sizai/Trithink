@@ -16,6 +16,7 @@ module.exports = {
     'main.cjs',
     'preload.cjs',
     'local-backup.cjs',
+    'window-state.cjs',
     'app/core.cjs',
     'package.json',
     'app/index.html',

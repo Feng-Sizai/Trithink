@@ -7,7 +7,7 @@ function previewNotice() {
   return calendarPreview ? '<div class="preview-notice"><span>示例体验 · 与原程序的数据分开保存</span><button type="button" class="text-button" data-action="calendar-clear-preview">清空预览数据</button></div>' : '';
 }
 function selectedRoutine(day) {
-  return model.routines[day] || { sleepTime: '', drinks: { coffee: 0, milkTea: 0, other: 0 } };
+  return model.routines[day] || { sleepTime: '', drinks: { coffee: 0, milkTea: 0, other: 0, water: 0 } };
 }
 function dayEvents(day) {
   return model.calendarEvents.filter(event => event.date === day).slice().sort((a, b) => b.priority - a.priority || a.createdAt.localeCompare(b.createdAt));
@@ -28,24 +28,35 @@ function renderCalendar() {
     positionScheduleEvents();
   }
 }
+function eventUrgentClass(event) {
+  const target = event.targetId && K.findTarget(model, event.targetId);
+  return target ? urgentClass({ ...target.record, ...C.effectiveDeadline(target.record, target.stage, target.project), projectId: target.project.id }) : '';
+}
 function renderScheduleEvent(event, timed = false) {
   const label = eventTimeLabel(event) + ' ' + event.title + '，' + event.priority + '星' + (event.priority === 0 ? '日常' : '') + (event.location ? '，' + event.location : '');
-  return '<button type="button" class="schedule-event schedule-color-' + (event.color || 'sage') + (timed ? ' schedule-timed-event' : '') + '" data-action="calendar-edit-event" data-id="' + event.id + '" title="' + esc(label) + '" aria-label="' + esc(label) + '"><span class="schedule-card-content"><span class="schedule-card-summary"><span class="schedule-event-title">' + esc(event.title) + '</span>' + compactStars(event.priority) + '</span></span>' + (timed ? '<span class="schedule-resize schedule-resize-start" data-schedule-edge="start" aria-hidden="true"></span><span class="schedule-resize schedule-resize-end" data-schedule-edge="end" aria-hidden="true"></span>' : '') + '</button>';
+  return '<button type="button" class="schedule-event schedule-color-' + (event.color || 'sage') + (timed ? ' schedule-timed-event' : '') + eventUrgentClass(event) + '" data-action="calendar-edit-event" data-id="' + event.id + '" title="' + esc(label) + '" aria-label="' + esc(label) + '"><span class="schedule-card-content"><span class="schedule-card-summary"><span class="schedule-event-title">' + esc(event.title) + '</span>' + compactStars(event.priority) + '</span><span class="schedule-short-time">' + esc(eventTimeLabel(event)) + '</span></span><span class="schedule-full-label">' + esc(event.title + ' · ' + eventTimeLabel(event)) + '</span>' + (timed ? '<span class="schedule-resize schedule-resize-start" data-schedule-edge="start" aria-hidden="true"></span><span class="schedule-resize schedule-resize-end" data-schedule-edge="end" aria-hidden="true"></span>' : '') + '</button>';
 }
 function renderSchedule() {
   const days = K.weekDays(calendarDay);
   const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  const earlyEvents = model.calendarEvents.filter(event => days.includes(event.date) && event.startTime && event.endTime && K.timeMinutes(event.endTime) <= K.SCHEDULE.start);
+  const earlyNotice = earlyEvents.length ? '<details class="early-events"><summary>本周另有 ' + earlyEvents.length + ' 项06:00之前的安排，点击查看</summary><div>' + earlyEvents.map(event => '<button type="button" class="early-event schedule-color-' + event.color + '" data-action="calendar-edit-event" data-id="' + event.id + '">' + dateLabel(event.date) + ' ' + eventTimeLabel(event) + ' · ' + esc(event.title) + '</button>').join('') + '</div></details>' : '';
   const hours = Array.from({ length: 18 }, (_, hour) => String(hour + 6).padStart(2, '0') + ':00');
-  return '<section class="calendar-panel schedule-panel" aria-label="每周日程表"><div class="calendar-toolbar"><div><h2>' + days[0].slice(0, 4) + '年 <strong>' + dateLabel(days[0]) + '—' + dateLabel(days[6]) + '</strong></h2><p class="schedule-hint">每格 1 小时 · 拖选每格 15 分钟新建 · 拖动上下边缘调整 · 长按 0.45 秒移动（15 分钟刻度）</p></div><div class="actions">' + calendarViewButton() + '<button type="button" class="secondary calendar-nav" data-action="calendar-week" data-offset="-1" aria-label="上一周">‹</button><button type="button" class="secondary" data-action="calendar-today">本周</button><button type="button" class="secondary calendar-nav" data-action="calendar-week" data-offset="1" aria-label="下一周">›</button><label class="schedule-date-picker"><span class="sr-only">跳转日期</span><input type="date" id="schedule-date" aria-label="跳转日期" min="0002-01-01" max="9998-12-31" value="' + calendarDay + '"></label></div></div><div class="schedule-scroll" id="schedule-scroll" tabindex="0" aria-label="完整日程时间表，窄屏可左右滚动"><div class="schedule-grid"><div class="schedule-heading"><div class="schedule-corner">时间</div>' + days.map((day, i) => '<button type="button" class="schedule-day-heading' + (day === today ? ' is-today' : '') + (day === calendarDay ? ' is-selected' : '') + '" data-action="calendar-select" data-date="' + day + '" aria-pressed="' + (day === calendarDay) + '"><span>' + weekdays[i] + '</span><time datetime="' + day + '">' + Number(day.slice(5, 7)) + '/' + Number(day.slice(8)) + '</time></button>').join('') + '</div><div class="schedule-body"><div class="schedule-axis">' + hours.map(hour => '<div class="schedule-hour"><span>' + hour + '</span></div>').join('') + '<span class="schedule-end-label">24:00</span></div>' + days.map(day => '<div class="schedule-column' + (day === today ? ' is-today' : '') + '" data-schedule-day="' + day + '">' + hours.map(hour => '<button type="button" class="schedule-slot" data-action="calendar-new-event" data-date="' + day + '" data-time="' + hour + '" aria-label="在' + day + ' ' + hour + '添加日程"></button>').join('') + K.scheduleLayout(dayEvents(day).filter(event => event.startTime && event.endTime && K.timeMinutes(event.endTime) > K.SCHEDULE.start)).map(item => renderScheduleEvent(item.event, true)).join('') + '</div>').join('') + '</div></div></div></section>';
+  return '<section class="calendar-panel schedule-panel" aria-label="每周日程表"><div class="calendar-toolbar"><div><h2>' + days[0].slice(0, 4) + '年 <strong>' + dateLabel(days[0]) + '—' + dateLabel(days[6]) + '</strong></h2><p class="schedule-hint">每格 1 小时 · 拖选每格 15 分钟新建 · 拖动上下边缘调整 · 长按 0.45 秒移动（15 分钟刻度）</p></div><div class="actions">' + calendarViewButton() + '<button type="button" class="secondary calendar-nav" data-action="calendar-week" data-offset="-1" aria-label="上一周">‹</button><button type="button" class="secondary" data-action="calendar-today">本周</button><button type="button" class="secondary calendar-nav" data-action="calendar-week" data-offset="1" aria-label="下一周">›</button><label class="schedule-date-picker"><span class="sr-only">跳转日期</span><input type="date" id="schedule-date" aria-label="跳转日期" min="0002-01-01" max="9998-12-31" value="' + calendarDay + '"></label></div></div>' + earlyNotice + '<p class="muted small short-event-hint">短日程已放大以便点击和移动，左侧色线表示实际时长。</p><div class="schedule-scroll" id="schedule-scroll" tabindex="0" aria-label="完整日程时间表，窄屏可左右滚动"><div class="schedule-grid"><div class="schedule-heading"><div class="schedule-corner">时间</div>' + days.map((day, i) => '<button type="button" class="schedule-day-heading' + (day === today ? ' is-today' : '') + (day === calendarDay ? ' is-selected' : '') + '" data-action="calendar-select" data-date="' + day + '" aria-pressed="' + (day === calendarDay) + '"><span>' + weekdays[i] + '</span><time datetime="' + day + '">' + Number(day.slice(5, 7)) + '/' + Number(day.slice(8)) + '</time></button>').join('') + '</div><div class="schedule-body"><div class="schedule-axis">' + hours.map(hour => '<div class="schedule-hour"><span>' + hour + '</span></div>').join('') + '<span class="schedule-end-label">24:00</span></div>' + days.map(day => '<div class="schedule-column' + (day === today ? ' is-today' : '') + '" data-schedule-day="' + day + '">' + hours.map(hour => '<button type="button" class="schedule-slot" data-action="calendar-new-event" data-date="' + day + '" data-time="' + hour + '" aria-label="在' + day + ' ' + hour + '添加日程"></button>').join('') + K.scheduleLayout(dayEvents(day).filter(event => event.startTime && event.endTime && K.timeMinutes(event.endTime) > K.SCHEDULE.start), 54).map(item => renderScheduleEvent(item.event, true)).join('') + '</div>').join('') + '</div></div></div></section>';
 }
 function positionScheduleEvents() {
   for (const column of document.querySelectorAll('[data-schedule-day]')) {
-    const layout = K.scheduleLayout(dayEvents(column.dataset.scheduleDay).filter(event => event.startTime && event.endTime && K.timeMinutes(event.endTime) > K.SCHEDULE.start));
+    const layout = K.scheduleLayout(dayEvents(column.dataset.scheduleDay).filter(event => event.startTime && event.endTime && K.timeMinutes(event.endTime) > K.SCHEDULE.start), 54);
     for (const item of layout) {
       const button = [...column.querySelectorAll('.schedule-timed-event')].find(node => node.dataset.id === item.event.id);
       // CSSOM sets numeric geometry without enabling inline styles in the CSP.
-      button.style.top = ((Math.max(item.start, K.SCHEDULE.start) - K.SCHEDULE.start) / 60 * K.SCHEDULE.hourHeight) + 'px';
-      button.style.height = ((item.end - Math.max(item.start, K.SCHEDULE.start)) / 60 * K.SCHEDULE.hourHeight) + 'px';
+      const actualTop = (Math.max(item.start, K.SCHEDULE.start) - K.SCHEDULE.start) / 60 * K.SCHEDULE.hourHeight;
+      const displayedTop = Math.min(actualTop, 18 * K.SCHEDULE.hourHeight - 32);
+      button.style.top = displayedTop + 'px';
+      button.style.setProperty('--duration-offset', (actualTop - displayedTop) + 'px');
+      const trueHeight = (item.end - Math.max(item.start, K.SCHEDULE.start)) / 60 * K.SCHEDULE.hourHeight;
+      button.style.height = Math.max(32, trueHeight) + 'px';
+      button.style.setProperty('--duration-height', trueHeight + 'px');
       button.style.left = 'calc(' + (item.column / item.columns * 100) + '% + 3px)';
       button.style.width = 'calc(' + (100 / item.columns) + '% - 6px)';
       button.classList.toggle('is-short', item.end - Math.max(item.start, K.SCHEDULE.start) < 60);
@@ -55,12 +66,12 @@ function positionScheduleEvents() {
 function renderCalendarDay(day) {
   const r = model.routines[day];
   const events = dayEvents(day);
-  return `<section class="calendar-cell${day.slice(0, 7) !== calendarMonth ? ' outside-month' : ''}${day === today ? ' is-today' : ''}${day === calendarDay ? ' is-selected' : ''}" data-calendar-date="${day}" aria-label="${day}"><button type="button" class="calendar-date" data-action="calendar-select" data-date="${day}" aria-pressed="${day === calendarDay}"><time datetime="${day}">${Number(day.slice(8))}</time>${day === today ? '<span>今天</span>' : ''}</button>${r ? `<div class="calendar-sleep">入睡 ${r.sleepTime || '未填'}</div><div class="calendar-drinks">咖啡 ${r.drinks.coffee} · 奶茶 ${r.drinks.milkTea}<br>其他 ${r.drinks.other} 杯</div>` : '<div class="calendar-no-record">暂无作息记录</div>'}<div class="calendar-events">${events.map(event => `<button type="button" class="calendar-event schedule-color-${event.color || 'sage'}" data-action="calendar-edit-event" data-id="${event.id}" title="${esc(event.title + ' · ' + eventTimeLabel(event) + (event.location ? ' · ' + event.location : ''))}" aria-label="${esc(event.title)}，${event.priority}星${event.priority === 0 ? '日常' : ''}"><span class="calendar-event-title">${esc(event.title)}</span>${compactStars(event.priority)}</button>`).join('')}</div><button type="button" class="calendar-add" data-action="calendar-new-event" data-date="${day}" aria-label="为${day}添加事件">＋ 添加标注</button></section>`;
+  return `<section class="calendar-cell${day.slice(0, 7) !== calendarMonth ? ' outside-month' : ''}${day === today ? ' is-today' : ''}${day === calendarDay ? ' is-selected' : ''}" data-calendar-date="${day}" aria-label="${day}"><button type="button" class="calendar-date" data-action="calendar-select" data-date="${day}" aria-pressed="${day === calendarDay}"><time datetime="${day}">${Number(day.slice(8))}</time>${day === today ? '<span>今天</span>' : ''}</button>${r ? `<div class="calendar-sleep">入睡 ${r.sleepTime || '未填'}</div><div class="calendar-drinks">咖啡 ${r.drinks.coffee} · 奶茶 ${r.drinks.milkTea}<br>其他 ${r.drinks.other} · 喝水 ${r.drinks.water || 0} 杯</div>` : '<div class="calendar-no-record">暂无作息记录</div>'}<div class="calendar-events">${events.map(event => `<button type="button" class="calendar-event schedule-color-${event.color || 'sage'}${eventUrgentClass(event)}" data-action="calendar-edit-event" data-id="${event.id}" title="${esc(event.title + ' · ' + eventTimeLabel(event) + (event.location ? ' · ' + event.location : ''))}" aria-label="${esc(event.title)}，${event.priority}星${event.priority === 0 ? '日常' : ''}"><span class="calendar-event-title">${esc(event.title)}</span>${compactStars(event.priority)}</button>`).join('')}</div><button type="button" class="calendar-add" data-action="calendar-new-event" data-date="${day}" aria-label="为${day}添加事件">＋ 添加标注</button></section>`;
 }
 function renderCalendarDetail() {
   const r = selectedRoutine(calendarDay);
   const events = dayEvents(calendarDay);
-  return `<section class="routine-section calendar-detail" id="calendar-detail"><div class="summary"><h2>${dateLabel(calendarDay)} · 每日记录</h2><span class="muted small">${calendarDay === today ? '今天' : calendarDay}</span></div><form id="calendar-sleep-form" class="sleep-form" data-date="${calendarDay}"><label for="calendar-sleep">计划入睡时间</label><input id="calendar-sleep" type="time" name="sleepTime" value="${r.sleepTime}" required><button type="submit" class="primary">保存时间</button></form><p class="muted small">${r.sleepTime ? '已保存，可修改或补记。' : '填写后保存，日历会按日期保留。'}</p><div class="drink-grid">${drinks.map(drink => `<div class="drink-card" data-drink="${drink.id}"><h3>${drink.name}</h3><div class="drink-number"><output>${r.drinks[drink.id]}</output><span>杯</span></div><button type="button" class="secondary" data-action="add-drink" data-kind="${drink.id}" data-date="${calendarDay}">＋ ${drink.name}</button></div>`).join('')}</div><p class="muted small">饮品可追加；每次确认后增加一杯，可按 Ctrl+Z 撤销。</p><div class="summary"><h3>当日事件</h3><button type="button" class="text-button" data-action="calendar-new-event" data-date="${calendarDay}">＋ 添加事件</button></div>${events.length ? events.map(event => {
+  return `<section class="routine-section calendar-detail" id="calendar-detail"><div class="summary"><h2>${dateLabel(calendarDay)} · 每日记录</h2><span class="muted small">${calendarDay === today ? '今天' : calendarDay}</span></div><form id="calendar-sleep-form" class="sleep-form" data-date="${calendarDay}"><label for="calendar-sleep">计划入睡时间</label><input id="calendar-sleep" type="time" name="sleepTime" value="${r.sleepTime}" required><button type="submit" class="primary">保存时间</button></form><p class="muted small">${r.sleepTime ? '已保存，可修改或补记。' : '填写后保存，日历会按日期保留。'}</p><div class="drink-grid">${drinks.map(drink => `<div class="drink-card" data-drink="${drink.id}"><h3>${drink.name}</h3><div class="drink-number"><output>${r.drinks[drink.id]}</output><span>杯</span></div><button type="button" class="secondary" data-action="add-drink" data-kind="${drink.id}" data-date="${calendarDay}">＋ ${drink.name}</button>${drinkEditButton(drink, calendarDay)}</div>`).join('')}</div><p class="muted small">饮品可追加，也可点击“修改杯数”更正当前日期的记录。</p><div class="summary"><h3>当日事件</h3><button type="button" class="text-button" data-action="calendar-new-event" data-date="${calendarDay}">＋ 添加事件</button></div>${events.length ? events.map(event => {
     const target = K.findTarget(model, event.targetId);
     return `<article class="calendar-event-row" data-event-id="${event.id}"><div><h3>${esc(event.title)}</h3><div class="meta"><span class="muted small">${eventTimeLabel(event)}${event.location ? ' · ' + esc(event.location) : ''}</span>${stars(event.priority)}<span class="muted small">${target ? '已同步至' + esc(target.project.title) : '尚未同步到项目'}</span></div></div><div class="row-actions"><button type="button" class="text-button" data-action="calendar-edit-event" data-id="${event.id}">编辑</button><button type="button" class="text-button" data-action="${target ? 'open-project' : 'calendar-sync'}" data-id="${target ? target.project.id : event.id}">${target ? '查看项目' : '同步到项目'}</button><button type="button" class="text-button danger" data-action="calendar-delete-event" data-id="${event.id}">删除</button></div></article>`;
   }).join('') : '<p class="muted">这一天还没有标注。</p>'}</section>`;
@@ -69,7 +80,8 @@ function calendarEventForm(id, date, startTime, endTime) {
   const event = id ? model.calendarEvents.find(item => item.id === id) : { title: '', priority: 1, date, startTime, endTime: endTime || (startTime ? K.minuteTime(Math.min(1440, K.timeMinutes(startTime) + 60)) : null) };
   if (!event) return;
   const linked = K.findTarget(model, event.targetId);
-  openModal(id ? '编辑日历事件' : '添加日历事件', `<div class="form-grid"><label class="field wide">事件名称<input name="title" maxlength="200" value="${esc(event.title)}" required autocomplete="off"></label><label class="field">日期<input type="date" name="date" value="${event.date}" required></label><label class="field">重要程度（星级）<select name="priority">${priorityOptions(event.priority)}</select></label><label class="field">开始时间（选填）<input type="time" name="startTime" value="${event.startTime || ''}"></label><div class="field"><label for="calendar-end-time">截止时间（选填）</label><input id="calendar-end-time" name="endTime" type="time" value="${event.endTime === '24:00' ? '' : event.endTime || ''}" ${event.endTime === '24:00' ? 'disabled' : ''}><label class="end-of-day"><input type="checkbox" name="endOfDay" ${event.endTime === '24:00' ? 'checked' : ''}>当天结束（24:00）</label></div><label class="field wide">备注（选填）<input name="location" maxlength="200" value="${esc(event.location || '')}" autocomplete="off"></label><label class="field">日程颜色<select name="color">${Object.entries(scheduleColors).map(([value, name]) => '<option value="' + value + '"' + ((event.color || 'sage') === value ? ' selected' : '') + '>' + name + '</option>').join('')}</select></label></div><p class="muted small">只有开始时间和截止时间都填写，才会显示在日程表中；未填完整可直接添加到项目。勾选“当天结束”可设置为 24:00。</p>${linked ? '<p class="muted small">保存后会更新对应项目事项的名称、星级和截止日期。</p>' : ''}`, 'calendar-save-event', { id });
+  if (redirectToPendingDraft('calendar-save-event', { id })) return;
+  openModal(id ? '编辑日历事件' : '添加日历事件', `<div class="form-grid"><label class="field wide">事件名称<input name="title" maxlength="200" value="${esc(event.title)}" required autocomplete="off"></label><label class="field">日期<input type="date" name="date" value="${event.date}" required></label><label class="field">重要程度（星级）<select name="priority">${priorityOptions(event.priority)}</select></label><label class="field">开始时间（选填）<input type="time" name="startTime" value="${event.startTime || ''}"></label><div class="field"><label for="calendar-end-time">截止时间（选填）</label><input id="calendar-end-time" name="endTime" type="time" value="${event.endTime === '24:00' ? '' : event.endTime || ''}" ${event.endTime === '24:00' ? 'disabled' : ''}><label class="end-of-day"><input type="checkbox" name="endOfDay" ${event.endTime === '24:00' ? 'checked' : ''}>当天结束（24:00）</label></div><label class="field wide">备注（选填）<input name="location" maxlength="200" value="${esc(event.location || '')}" autocomplete="off"></label><label class="field">日程颜色<select name="color">${Object.entries(scheduleColors).map(([value, name]) => '<option value="' + value + '"' + ((event.color || 'sage') === value ? ' selected' : '') + '>' + name + '</option>').join('')}</select></label></div><p class="muted small">只有开始时间和截止时间都填写，才会显示在日程表中；未填完整可直接添加到项目。勾选“当天结束”可设置为 24:00。</p>${linked ? '<p class="muted small">只同步本次实际修改的名称、星级或截止时间；仅改备注、颜色不会覆盖项目中的修改。</p>' : ''}`, 'calendar-save-event', { id });
   if (id) $('.modal-actions', modal).insertAdjacentHTML('afterbegin', '<button type="button" class="danger text-button modal-delete" data-action="calendar-delete-event" data-id="' + id + '">删除日程</button>');
 }
 function calendarSyncPrompt(id) {
@@ -79,7 +91,7 @@ function calendarSyncPrompt(id) {
 }
 function calendarSyncForm(id) {
   const event = model.calendarEvents.find(item => item.id === id);
-  openModal(event?.startTime && event?.endTime ? '选择同步位置' : '添加到我的项目', `<div class="form-grid"><label class="field wide">加入方式<select name="destination" id="calendar-destination"><option value="project">新建独立项目</option><option value="stage" ${model.projects.length ? '' : 'disabled'}>加入已有项目 · 新阶段</option><option value="task" ${model.projects.some(project => project.stages.length) ? '' : 'disabled'}>加入已有项目 · 新任务</option></select></label><label class="field wide" id="sync-project" hidden>所属项目<select name="projectId">${model.projects.map(project => `<option value="${project.id}">${esc(project.title)}</option>`).join('')}</select></label><label class="field wide" id="sync-stage" hidden>所属阶段<select name="stageId"></select></label></div><p class="muted small">事件日期和截止时刻将作为项目截止时间。后续修改日历事件会更新对应事项；在项目中修改不会反向改动日历。</p>`, 'calendar-confirm-sync', { id });
+  openModal(event?.startTime && event?.endTime ? '选择同步位置' : '添加到我的项目', `<div class="form-grid"><label class="field wide">加入方式<select name="destination" id="calendar-destination"><option value="project">新建独立项目</option><option value="stage" ${model.projects.length ? '' : 'disabled'}>加入已有项目 · 新阶段</option><option value="task" ${model.projects.some(project => project.stages.length) ? '' : 'disabled'}>加入已有项目 · 新任务</option></select></label><label class="field wide" id="sync-project" hidden>所属项目<select name="projectId">${model.projects.map(project => `<option value="${project.id}">${esc(project.title)}</option>`).join('')}</select></label><label class="field wide" id="sync-stage" hidden>所属阶段<select name="stageId"></select></label></div><p class="muted small">事件日期和截止时刻将作为项目截止时间。后续仅同步日历中实际修改的字段；仅改备注不会覆盖项目名称或截止时间。在项目中修改不会反向改动日历。</p>`, 'calendar-confirm-sync', { id });
   updateSyncFields();
 }
 function updateSyncFields() {
@@ -152,9 +164,11 @@ function calendarClick(button) {
 function calendarSubmit(action, context, data) {
   if (!action.startsWith('calendar-')) return false;
   let nextAction = null;
+  let savedEventId = null;
   let successMessage = '已保存。';
   if (action === 'calendar-save-event') {
     const event = K.saveEvent(model, { title: String(data.get('title') || ''), date: data.get('date'), priority: Number(data.get('priority')), startTime: data.get('startTime') || null, endTime: data.has('endOfDay') ? '24:00' : data.get('endTime') || null, location: String(data.get('location') || ''), color: data.get('color') || 'sage' }, context.id);
+    savedEventId = event.id;
     calendarDay = event.date;
     calendarMonth = event.date.slice(0, 7);
     if (!K.findTarget(model, event.targetId)) nextAction = () => event.startTime && event.endTime ? calendarSyncPrompt(event.id) : calendarSyncForm(event.id);
@@ -164,12 +178,15 @@ function calendarSubmit(action, context, data) {
     successMessage = '已从项目中移除，日程已保留。';
   }
   if (action === 'calendar-confirm-repeat') {
-    const copies = K.repeatEvent(model, context.id, calendarRepeatOptions());
-    successMessage = '已添加 ' + copies.length + ' 条未来日程。';
+    const options = calendarRepeatOptions();
+    const preview = K.repeatPreview(model, context.id, options);
+    const copies = K.repeatEvent(model, context.id, options);
+    successMessage = copies.length ? '已添加 ' + copies.length + ' 条未来日程。' + (options.skipDuplicates && preview.duplicateDates.length ? '已跳过 ' + preview.duplicateDates.length + ' 个重复日期。' : '') : '这些未来日程已存在，未重复添加。';
   }
   if (action === 'calendar-start-sync') nextAction = () => calendarSyncForm(context.id);
   if (action === 'calendar-confirm-sync') K.syncEvent(model, context.id, { kind: data.get('destination'), projectId: data.get('projectId'), stageId: data.get('stageId') });
   if (action === 'calendar-confirm-delete') {
+    if (model.formDraft?.action === 'calendar-save-event' && model.formDraft.context.id === context.id) clearFormDraft();
     if (context.linked && !['yes', 'no'].includes(data.get('withTarget'))) throw new Error('请选择是否同时删除对应项目事项');
     K.deleteEvent(model, context.id, context.linked && data.get('withTarget') === 'yes');
   }
@@ -181,9 +198,11 @@ function calendarSubmit(action, context, data) {
     calendarMonth = today.slice(0, 7);
     page = 'calendar';
   }
+  if (action === 'calendar-save-event') clearFormDraft();
   const result = save(action === 'calendar-start-sync' ? '' : successMessage);
   if (!result.ok) throw new Error(result.error || '保存失败，请重试');
-  closeModal();
+  tutorialCommitted(action, context, savedEventId);
+  closeModal({ submitted: true });
   render();
   if (nextAction) nextAction();
   return true;

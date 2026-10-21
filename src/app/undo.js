@@ -37,7 +37,7 @@ function undoLastOperation(message = '已撤销上一步操作。') {
 }
 document.addEventListener('keydown', event => {
   if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.isComposing || event.key.toLowerCase() !== 'z') return;
-  if (modal.open || event.target.isContentEditable || event.target.closest?.('input,textarea,select,[contenteditable="true"],[contenteditable=""]')) return;
+  if (modal.open || event.target.closest?.('#tutorial') || event.target.isContentEditable || event.target.closest?.('input,textarea,select,[contenteditable="true"],[contenteditable=""]')) return;
   event.preventDefault();
   if (scheduleGesture) { cancelScheduleGesture(); toast('已取消当前拖动。'); return; }
   undoLastOperation();

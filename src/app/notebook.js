@@ -59,6 +59,7 @@ function saveNote() {
     if (isNew) archiveDraft();
     const result = save(isNew ? '已按日期收录这条速写。' : '速写修改已保存。');
     if (!result.ok) return;
+    tutorialCommitted('note-save');
     destroyEditor(false);
     render();
   } catch (error) {
@@ -74,6 +75,7 @@ function newNote() {
     model.notebook.activeEntryId = null;
     const result = save(hadDraft ? '草稿已收录，已新建速写。' : '已新建速写。');
     if (!result.ok) return;
+    tutorialCommitted('note-new');
     destroyEditor(false);
     page = 'notebook';
     render();

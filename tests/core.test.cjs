@@ -24,8 +24,10 @@ test('model validation preserves selected work and inheritance after a round tri
     selected: [],
     visible: [],
     excludedProjects: [],
+    deferred: [],
     mode: 'auto',
-    manualSelected: []
+    manualSelected: [],
+    manualOrder: []
   });
   assert.equal(Core.getPlan(model, '2026-10-17').selected.length, 3);
 });
@@ -131,7 +133,8 @@ test('deleted work is removed from saved daily plan references without changing 
     drinks: {
       coffee: 0,
       milkTea: 0,
-      other: 0
+      other: 0,
+      water: 0
     }
   });
 });
@@ -282,7 +285,7 @@ test('automatic projects compete with manually selected tasks by normal priority
   const model = Core.sampleModel('2026-10-17');
   model.projects.push(emptyProject('p_first', 3, 3), emptyProject('p_later', 1, 1));
   const plan = Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
-  assert.deepEqual(plan.selected, ['t_exercises', 't_derivative', 's_proposal', 'p_first', 'p_later']);
+  assert.deepEqual(plan.selected, ['t_exercises', 'p_first', 's_proposal']);
   assert.deepEqual(plan.visible, ['t_exercises', 'p_first', 's_proposal']);
   Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
   assert.equal(plan.selected.filter(id => id === 'p_first').length, 1);
@@ -322,8 +325,7 @@ test('automatic empty projects use stars then deadlines against selected tasks',
     excludedProjects: []
   };
   const plan = Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
-  const selected = new Set(plan.selected);
-  assert.deepEqual(Core.sortTasks(Core.flattenTasks(model).filter(task => selected.has(task.id))).map(task => task.id), ['p_auto3', 't_earlier', 't_later', 'p_auto2high', 'p_auto2low', 'p_auto1']);
+  assert.deepEqual(Core.automaticQueue(model, '2026-10-17', new Date('2026-10-17T00:00:00')).map(task => task.id), ['p_auto3', 't_earlier', 't_later', 'p_auto2high', 'p_auto2low', 'p_auto1']);
   assert.deepEqual(plan.visible, ['p_auto3', 't_earlier', 't_later']);
 });
 test('version 1 backups without project completion or exclusions remain compatible', () => {
@@ -340,36 +342,27 @@ test('version 1 backups without project completion or exclusions remain compatib
   old.projects[0].done = 'yes';
   assert.throws(() => Core.validateModel(old));
 });
-test('completed visible cards wait for explicit continuation while automatic projects queue', () => {
+test('completed automatic cards are immediately replaced from the entire unfinished pool', () => {
   const model = Core.sampleModel('2026-10-17');
   model.projects[0].stages[0].tasks[1].done = true;
   model.projects.push(emptyProject('p_new'));
-  const originalVisible = model.plans['2026-10-17'].visible.slice();
   const plan = Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
-  assert.deepEqual(plan.visible, originalVisible);
+  assert.deepEqual(plan.visible, ['p_new', 's_proposal', 't_derivative']);
   assert.equal(plan.selected.includes('p_new'), true);
   plan.visible = []; // The controller explicitly discards completed cards on Continue.
   Core.syncAutoProjects(model, '2026-10-17', new Date('2026-10-17T00:00:00'));
   assert.equal(plan.visible[0], 'p_new');
   assert.equal(plan.visible.includes('t_exercises'), false);
 });
-test('manual project exclusions and automatic selection are local to the requested day', () => {
-  const model = Core.sampleModel('2026-10-17');
-  model.projects.push(emptyProject('p_skip'), emptyProject('p_done'));
-  model.projects[3].done = true;
-  const oldDay = JSON.stringify(model.plans['2026-10-17']);
-  const current = Core.getPlan(model, '2026-10-18');
-  current.excludedProjects = ['p_skip'];
-  Core.syncAutoProjects(model, '2026-10-18');
-  assert.deepEqual(current.selected, []);
-  assert.deepEqual(current.visible, []);
-  assert.equal(JSON.stringify(model.plans['2026-10-17']), oldDay);
+test('daily deferrals expire on the new day without carrying over manual choices', () => {
+  const model = Core.blankModel();
+  model.projects = ['a', 'b', 'c', 'd'].map(id => emptyProject(id));
+  Core.deferAutomaticTask(model, '2026-10-18', 'a');
+  const oldDay = JSON.stringify(model.plans['2026-10-18']);
   const tomorrow = Core.syncAutoProjects(model, '2026-10-19');
-  assert.deepEqual(tomorrow.selected, ['p_skip']);
-  assert.deepEqual(tomorrow.excludedProjects, []);
-  assert.equal(tomorrow.selected.includes('t_derivative'), false);
-  current.excludedProjects.push('t_derivative', 'missing');
-  assert.deepEqual(Core.validateModel(model).plans['2026-10-18'].excludedProjects, ['p_skip']);
+  assert.deepEqual(tomorrow.visible, ['a', 'b', 'c']);
+  assert.deepEqual(tomorrow.deferred, []);
+  assert.equal(JSON.stringify(model.plans['2026-10-18']), oldDay);
 });
 
 // Persistent completion timestamps and aggregated project/stage history.

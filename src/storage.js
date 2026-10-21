@@ -162,7 +162,7 @@
       if (native.json) {
         const model = parse(native.json);
         remember(model);
-        return { model: copyMemory(), persistent: true, recovered: Boolean(native.recovered) };
+        return { model: copyMemory(), persistent: true, recovered: Boolean(native.recovered), source: native.source };
       }
       const legacy = loadBrowser(defaultFactory);
       if (!legacy.isNew && (!legacy.error || legacy.recovered)) {
@@ -182,9 +182,11 @@
     try {
       const result = desktop.save(json);
       if (result.ok) {
-        remember(parse(json));
+        const saved = parse(result.json || json);
+        remember(saved);
         // Browser storage is a secondary mirror; its loss does not affect native files.
-        saveBrowser(raw);
+        saveBrowser(saved);
+        return { ...result, model: saved };
       }
       return result;
     } catch (_) { return { ok: false, persistent: false, error: '本机保存服务不可用，本次修改未保存。请导出备份。' }; }

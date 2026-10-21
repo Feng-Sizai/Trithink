@@ -92,6 +92,7 @@ async function createHost(singleInstance = true) {
   };
   const mockFs = {
     mkdirSync: () => {},
+    realpathSync: file => file,
     promises: {
       readFile: async filename => {
         state.reads.push(filename);
@@ -100,7 +101,7 @@ async function createHost(singleInstance = true) {
     }
   };
   vm.runInNewContext(fs.readFileSync(path.join(desktopDirectory, 'main.cjs'), 'utf8'), {
-    require: name => name === 'electron' ? electron : name === 'node:fs' ? mockFs : name === './local-backup.cjs' ? { createBackupStore: () => ({ load: () => ({ ok: true, empty: true }), save: () => ({ ok: true, persistent: true }) }) } : name === './app/core.cjs' ? require('../src/core.js') : require(name),
+    require: name => name === 'electron' ? electron : name === 'node:fs' ? mockFs : name === './window-state.cjs' ? require('../desktop/window-state.cjs') : name === './local-backup.cjs' ? { createBackupStore: () => ({ load: () => ({ ok: true, empty: true }), save: () => ({ ok: true, persistent: true }), manualBackup: () => ({ ok: true, file: 'fixed-directory/backup.json' }) }) } : name === './app/core.cjs' ? require('../src/core.js') : require(name),
     __dirname: desktopDirectory,
     process: { argv: [], env: {} },
     Response,
@@ -192,7 +193,11 @@ test('desktop data IPC rejects other frames and exposes no path operations', asy
   for (const event of [ { sender: {}, senderFrame: contents.mainFrame }, { sender: contents, senderFrame: { url: contents.mainFrame.url } } ]) {
     state.ipcMain.emit('three-things:data-save', event, '{}');
     assert.equal(event.returnValue.ok, false);
+    state.ipcMain.emit('three-things:manual-backup', event, '{}');
+    assert.equal(event.returnValue.ok, false);
   }
+  state.ipcMain.emit('three-things:manual-backup', valid, '{}');
+  assert.equal(valid.returnValue.ok, true);
   contents.mainFrame.url = 'https://example.invalid';
   state.ipcMain.emit('three-things:data-load', valid);
   assert.equal(valid.returnValue.ok, false);

@@ -2,8 +2,14 @@
  * Built in the shared private application scope; see build.config.cjs.
  */
 document.addEventListener('click', event => {
+  ensureCurrentDay();
   const button = event.target.closest('button');
   if (!button) {
+    const projectCard = event.target.closest('.project-card[data-project-id]');
+    if (projectCard && !modal.open && !event.target.closest('a,input,select,textarea')) {
+      openProjectDetail(projectCard.dataset.projectId);
+      return;
+    }
     const card = event.target.closest('.task-card[data-card-id]');
     if (card && !modal.open && !event.target.closest('a,input,select,textarea')) openTodayProject(card.dataset.cardId);
     return;
@@ -17,6 +23,7 @@ document.addEventListener('click', event => {
     closeOtherFeatures();
     boot = false;
     page = button.dataset.page;
+    if (page === 'calendar') calendarView = 'week';
     showQueue = false;
     render();
     if (fromOtherFeatures) main.focus({ preventScroll: true });
@@ -25,6 +32,7 @@ document.addEventListener('click', event => {
   const action = button.dataset.action,
     id = button.dataset.id;
   if (!action) return;
+  if (action === 'open-tutorial') { openTutorial(); return; }
   if (calendarClick(button)) return;
   if (action === 'set-plan-mode') changePlanMode(button.dataset.mode);
   if (action === 'choose-today') {
@@ -32,8 +40,6 @@ document.addEventListener('click', event => {
     page = 'all';
     render();
   }
-  if (action === 'toggle-manual') changeManualTask(id, !plan().manualSelected.includes(id));
-  if (action === 'manual-remove') changeManualTask(id, false);
   if (action === 'start-demo' || action === 'start-blank') {
     model = action === 'start-demo' ? C.sampleModel() : C.blankModel();
     boot = false;
@@ -43,11 +49,17 @@ document.addEventListener('click', event => {
   }
   if (action === 'new-project') editForm('project', null);
   if (action === 'edit-project') editForm('project', id);
-  if (action === 'open-project') {
-    activeProject = id;
-    page = 'detail';
-    render();
+  if (action === 'open-project') openProjectDetail(id);
+  if (action === 'complete-project') completeProjectPrompt(id);
+  if (action === 'restore-completed-group') restoreCompletedGroup(id);
+  if (action === 'edit-drink') editDrink(button);
+  if (action === 'restore-form-draft') restoreFormDraft();
+  if (action === 'discard-form-draft') {
+    clearFormDraft();
+    closeModal({ submitted: true });
+    if (save('已丢弃未提交草稿。', { recordUndo: false }).ok) render();
   }
+  if (action === 'dismiss-recovery-notice') { recoveryNoticeVisible = false; renderRecoveryNotice(); }
   if (action === 'new-stage') {
     activeProject = id;
     editForm('stage', null);
@@ -71,6 +83,13 @@ document.addEventListener('click', event => {
     }
   }
   if (action === 'add-today' || action === 'remove-today') changeToday(id, action === 'add-today');
+  if (action === 'queue-pin') reorderManualTask(id, 0);
+  if (action === 'reset-default-queue') resetDefaultQueue();
+  if (action === 'queue-move') {
+    const index = pendingToday().findIndex(t => t.id === id);
+    reorderManualTask(id, index + (button.dataset.direction === 'up' ? -1 : 1));
+  }
+  if (action === 'defer-today') deferToday(id);
   if (action === 'complete' || action === 'undo-complete') complete(id, action === 'complete');
   if (action === 'next') {
     refreshVisible();
@@ -125,8 +144,9 @@ document.addEventListener('click', event => {
   }
   if (action === 'add-drink') {
     const d = drinks.find(d => d.id === button.dataset.kind);
-    openModal('确认记录饮品', `<p class="muted small">记录日期：${esc(button.dataset.date || today)}</p><p>是否记录新摄入一杯${d.id === 'other' ? '其他饮品' : d.name}？</p><p class="danger">确认后可按 Ctrl+Z 撤销。</p>`, 'confirm-drink', {
+    openModal('确认记录饮品', `<p class="muted small" data-record-date>记录日期：${esc(button.dataset.date || today)}</p><p>${d.id === 'water' ? '是否记录喝了一杯水？' : '是否记录新摄入一杯' + (d.id === 'other' ? '其他饮品' : d.name) + '？'}</p><p class="danger">确认后可按 Ctrl+Z 撤销。</p>`, 'confirm-drink', {
       id: d.id,
+      followToday: !button.dataset.date,
       date: C.isDate(button.dataset.date) ? button.dataset.date : today
     });
   }
@@ -135,6 +155,7 @@ document.addEventListener('click', event => {
   if (action === 'choose-import') $('#backup-file', modal).click();
 });
 document.addEventListener('submit', event => {
+  ensureCurrentDay();
   if (event.target.id === 'sleep-form' || event.target.id === 'calendar-sleep-form') {
     event.preventDefault();
     const value = new FormData(event.target).get('sleepTime');
@@ -151,6 +172,8 @@ document.addEventListener('submit', event => {
     context = modalContext;
   if (!action) return;
   try {
+    tutorialValidate(action, context, data);
+    let createdId = null;
     if (calendarSubmit(action, context, data)) return;
     if (action === 'save-item') {
       const title = String(data.get('title') || '').trim();
@@ -177,6 +200,7 @@ document.addEventListener('submit', event => {
             stages: []
           };
           model.projects.push(p);
+          createdId = p.id;
           activeProject = p.id;
           page = 'detail';
         }
@@ -200,11 +224,14 @@ document.addEventListener('submit', event => {
               tasks: []
             };
           project.stages.push(stage);
+          createdId = stage.id;
           project.done = false;
           if (wasLeaf) {
             for (const p of Object.values(model.plans)) {
               p.selected = p.selected.map(x => x === project.id ? stage.id : x);
               p.visible = p.visible.map(x => x === project.id ? stage.id : x);
+              p.deferred = (p.deferred || []).map(x => x === project.id ? stage.id : x);
+              p.manualOrder = (p.manualOrder || []).map(x => x === project.id ? stage.id : x);
             }
           }
         }
@@ -227,11 +254,14 @@ document.addEventListener('submit', event => {
               done: false
             };
           g.stage.tasks.push(t);
+          createdId = t.id;
           g.stage.done = false;
           if (wasLeaf) {
             for (const p of Object.values(model.plans)) {
               p.selected = p.selected.map(x => x === g.stage.id ? t.id : x);
               p.visible = p.visible.map(x => x === g.stage.id ? t.id : x);
+              p.deferred = (p.deferred || []).map(x => x === g.stage.id ? t.id : x);
+              p.manualOrder = (p.manualOrder || []).map(x => x === g.stage.id ? t.id : x);
             }
           }
         }
@@ -239,6 +269,7 @@ document.addEventListener('submit', event => {
       if (!hasFinishedCard()) refreshVisible();
     }
     if (action === 'delete-item') {
+      if (model.formDraft?.action === 'save-item' && (model.formDraft.context.id === context.id || model.formDraft.context.projectId === context.id || model.formDraft.context.stageId === context.id)) clearFormDraft();
       if (context.kind === 'project') model.projects = model.projects.filter(p => p.id !== context.id);
       if (context.kind === 'stage') {
         const g = stageById(context.id);
@@ -249,6 +280,9 @@ document.addEventListener('submit', event => {
         g.stage.tasks = g.stage.tasks.filter(t => t.id !== context.id);
       }
     }
+    if (action === 'save-drink-count') K.setDrinkCount(model, context.date, context.id, Number(data.get('count')));
+    if (action === 'confirm-complete-project') C.setCompletion(model, context.id, true);
+    if (action === 'confirm-restore-group') C.setCompletion(model, context.id, false);
     if (action === 'confirm-drink') {
       K.addDrink(model, context.date, context.id);
     }
@@ -263,11 +297,11 @@ document.addEventListener('submit', event => {
       page = 'projects';
       boot = false;
     }
-    // Prevent a rapid second activation from committing the same confirmation twice.
-    modalAction = null;
-    modalContext = null;
-    modal.close();
-    save(action === 'confirm-drink' ? '饮品已记录。' : '已保存。');
+    if (action === 'save-item') clearFormDraft();
+    const result = save(action === 'confirm-drink' || action === 'save-drink-count' ? '饮品记录已保存。' : action === 'confirm-restore-group' ? '已恢复为未完成。' : '已保存。');
+    if (!result.ok) throw new Error(result.error || '保存失败，请重试');
+    tutorialCommitted(action, context, createdId);
+    closeModal({ submitted: true });
     render();
   } catch (error) {
     $('#form-error', modal).textContent = error.message || '无法保存，请检查输入。';
@@ -321,33 +355,64 @@ document.addEventListener('change', async event => {
     event.target.value = '';
   }
 });
-modal.addEventListener('cancel', () => {
-  modalAction = null;
-  modalContext = null;
+modal.addEventListener('cancel', event => {
+  event.preventDefault();
+  closeModal();
 });
 window.addEventListener('beforeunload', () => {
+  captureFormDraft();
   if (captureNotebook()) save(undefined, { recordUndo: false });
 });
+function ensureCurrentDay() {
+  const next = C.localDate();
+  if (next === today) return false;
+  const previous = today;
+  today = next;
+  if (calendarDay === previous) { calendarDay = next; calendarMonth = next.slice(0, 7); }
+  if (modalContext?.followToday) {
+    modalContext.date = today;
+    const label = modal.querySelector('[data-record-date]');
+    if (label) label.textContent = '记录日期：' + today;
+  }
+  return true;
+}
 function refreshAutomaticOrder() {
-  if (boot || page !== 'today' || modal.open || manualMode()) return;
-  if (pendingToday().map(t => t.id).join(' ') === automaticOrder) return;
-  render();
-  save(undefined, { recordUndo: false });
+  const newDay = ensureCurrentDay();
+  if (boot) return;
+  const changed = newDay || deadlineSignature() !== urgentSignature || page === 'today' && pendingToday().map(t => t.id).join(' ') !== automaticOrder;
+  if (!changed) return;
+  if (!captureNotebook()) return;
+  if (!save(undefined, { recordUndo: false }).ok) return;
+  if (!modal.open && !editor && !scheduleGesture) render();else updateSidebar();
+  if (newDay) toast('新的一天开始了，今日日期和安排已更新。');
 }
 window.addEventListener('focus', refreshAutomaticOrder);
-setInterval(() => {
-  const next = C.localDate();
-  if (next !== today) {
-    if (!captureNotebook()) return;
-    today = next;
-    save(undefined, { recordUndo: false });
-    render();
-    toast('新的一天开始了，请重新选择今日任务。');
-  } else {
-    refreshAutomaticOrder();
-  }
-}, 60000);
+setInterval(refreshAutomaticOrder, 60000);
 if (window.ThreeThingsDesktop) $('.local-label').textContent = '本机保存 · 每次修改自动备份';
 render();
+requestAnimationFrame(() => {
+  window.scrollTo(0, previousView?.scrollY || 0);
+  restoringView = false;
+  persistViewState();
+  if (model.formDraft) restoreFormDraft();
+  maybeStartTutorial();
+});
+let viewSaveTimer = null;
+window.addEventListener('scroll', () => {
+  if (restoringView) return;
+  clearTimeout(viewSaveTimer);
+  viewSaveTimer = setTimeout(persistViewState, 250);
+}, { passive: true });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    captureFormDraft();
+    if (captureNotebook()) save(undefined, { recordUndo: false });
+  } else refreshAutomaticOrder();
+});
+document.addEventListener('keydown', event => {
+  if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey || event.isComposing || event.key.toLowerCase() !== 's') return;
+  event.preventDefault();
+  manualBackupCurrent();
+});
 if (calendarPreview && loaded.isNew) save();
-if (loaded.recovered) toast('已从本机上一份有效备份恢复数据。建议导出一份备份。');else if (loaded.error) toast(loaded.error, true);
+if (loaded.recovered) toast('已恢复有效备份，来源和保存时间已显示在页面顶部。');else if (loaded.error) toast(loaded.error, true);

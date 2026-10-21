@@ -1,106 +1,46 @@
 'use strict';
-
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const C = require('../src/core.js');
-const DAY = '2026-10-17';
-
-function fixture() {
-  const model = C.sampleModel(DAY);
-  model.projects.push({
-    id: 'p_auto', title: '优先级最高的独立项目', priority: 3,
-    importance: 3, done: false, stages: []
-  });
-  return C.validateModel(model);
-}
-
-test('legacy plans migrate to automatic mode without filling manual slots', () => {
-  const legacy = C.sampleModel(DAY);
-  const selected = legacy.plans[DAY].selected.slice();
-  const model = C.validateModel(JSON.parse(JSON.stringify(legacy)));
-  assert.equal(model.plans[DAY].mode, 'auto');
-  assert.deepEqual(model.plans[DAY].manualSelected, []);
-  assert.deepEqual(model.plans[DAY].selected, selected);
+const DAY = '2026-10-20';
+function fixture(count = 6) { const m = C.blankModel(); m.projects = Array.from({ length: count }, (_, i) => ({ id: 'p' + i, title: 'p' + i, priority: i === 0 ? 3 : i === 1 ? 2 : 1, due: null, done: false, stages: [] })); return m; }
+const order = m => C.currentQueue(m, DAY).map(t => t.id);
+test('manual mode initially uses the entire current automatic queue', () => {
+  const m = fixture(); const auto = order(m); C.setPlanMode(m, DAY, 'manual'); assert.deepEqual(order(m), auto); assert.equal(order(m).length, 6); assert.deepEqual(C.getPlan(m, DAY).manualOrder, []);
+});
+test('manual changes can promote any later item into the leading three', () => {
+  const m = fixture(); C.setPlanMode(m, DAY, 'manual'); C.moveManualTask(m, DAY, 'p5', 0); assert.deepEqual(order(m), ['p5', 'p0', 'p1', 'p2', 'p3', 'p4']); assert.equal(m.plans[DAY].visible[0], 'p5');
+});
+test('completion and new work update the same manually ordered unfinished pool', () => {
+  const m = fixture(); C.setPlanMode(m, DAY, 'manual'); C.moveManualTask(m, DAY, 'p5', 0); C.setCompletion(m, 'p5', true); m.projects.push({ id: 'new', title: 'new', priority: 3, done: false, stages: [] }); C.syncAutoProjects(m, DAY); assert(!order(m).includes('p5')); assert(order(m).includes('new')); assert.equal(order(m)[0], 'p0'); assert.equal(order(m).length, 6);
+});
+test('manual changes remain shared when switching to auto and back', () => {
+  const m = fixture(); C.setPlanMode(m, DAY, 'manual'); C.moveManualTask(m, DAY, 'p5', 0); C.setPlanMode(m, DAY, 'auto'); assert.equal(order(m)[0], 'p5'); C.setPlanMode(m, DAY, 'manual'); assert.equal(order(m)[0], 'p5');
+});
+test('manual full order survives validation and new day starts with automatic rules', () => {
+  const m = fixture(); C.setPlanMode(m, DAY, 'manual'); C.moveManualTask(m, DAY, 'p5', 0); const copy = C.validateModel(JSON.parse(JSON.stringify(m))); assert.equal(order(copy)[0], 'p5'); assert.deepEqual(C.getPlan(copy, '2026-10-21').manualOrder, []); assert.equal(C.getPlan(copy, '2026-10-21').mode, 'auto');
+});
+test('a deferred item moves behind every other item even with two or three left', () => {
+  for (const count of [2, 3, 6]) { const m = fixture(count); C.deferAutomaticTask(m, DAY, 'p0'); assert.equal(order(m).at(-1), 'p0'); assert.equal(order(m).length, count); C.deferAutomaticTask(m, DAY, 'p1'); assert.equal(order(m).at(-1), 'p1'); C.deferAutomaticTask(m, DAY, 'p0'); assert.equal(order(m).at(-1), 'p0'); }
+});
+test('deleted IDs are cleaned and invalid manual positions fail without changing the queue', () => {
+  const m = fixture(); C.setPlanMode(m, DAY, 'manual'); const before = JSON.stringify(m); for (const pos of [-1, 6, 1.2, '0']) assert.throws(() => C.moveManualTask(m, DAY, 'p0', pos)); assert.equal(JSON.stringify(m), before); m.projects.pop(); C.syncAutoProjects(m, DAY); assert(!order(m).includes('p5')); const bad = JSON.parse(JSON.stringify(m)); bad.plans[DAY].manualOrder = ['../bad']; assert.throws(() => C.validateModel(bad));
 });
 
-test('manual choices never admit a fourth task or receive automatic projects', () => {
-  const model = fixture();
-  C.setPlanMode(model, DAY, 'manual');
-  for (const id of ['s_proposal', 't_derivative', 't_exercises']) C.setManualTask(model, DAY, id, true);
-  const before = model.plans[DAY].manualSelected.slice();
-  assert.throws(() => C.setManualTask(model, DAY, 'p_auto', true), /最多选择三项/);
-  assert.deepEqual(model.plans[DAY].manualSelected, before);
-  C.syncAutoProjects(model, DAY);
-  assert.deepEqual(model.plans[DAY].manualSelected, before);
-  assert.equal(model.plans[DAY].selected.includes('p_auto'), true);
-  C.setManualTask(model, DAY, 't_derivative', false);
-  C.setManualTask(model, DAY, 'p_auto', true);
-  assert.deepEqual(model.plans[DAY].manualSelected, ['s_proposal', 't_exercises', 'p_auto']);
+test('default reset clears every daily override and preserves data and other days', () => {
+  const m = fixture(); C.deferAutomaticTask(m, DAY, 'p0'); C.setPlanMode(m, DAY, 'manual'); C.moveManualTask(m, DAY, 'p4', 0); C.setPlanMode(m, DAY, 'auto');
+  const p = C.getPlan(m, DAY); p.excludedProjects = ['p1']; p.manualSelected = ['p2'];
+  C.deferAutomaticTask(m, '2026-10-19', 'p2'); const yesterday = JSON.stringify(m.plans['2026-10-19']), projects = JSON.stringify(m.projects);
+  C.resetAutomaticQueue(m, DAY); assert.deepEqual(order(m), ['p0', 'p1', 'p2', 'p3', 'p4', 'p5']);
+  for (const key of ['deferred', 'excludedProjects', 'manualOrder', 'manualSelected']) assert.deepEqual(p[key], []);
+  assert.equal(JSON.stringify(m.projects), projects); assert.equal(JSON.stringify(m.plans['2026-10-19']), yesterday);
 });
-
-test('manual drag order survives switching modes, backup round trips and other days', () => {
-  const model = fixture();
-  const automatic = C.syncAutoProjects(model, DAY).visible.slice();
-  C.setPlanMode(model, DAY, 'manual');
-  for (const id of ['t_exercises', 't_derivative', 's_proposal']) C.setManualTask(model, DAY, id, true);
-  C.moveManualTask(model, DAY, 's_proposal', 0);
-  const expected = ['s_proposal', 't_exercises', 't_derivative'];
-  C.setPlanMode(model, DAY, 'auto');
-  C.syncAutoProjects(model, DAY);
-  assert.deepEqual(model.plans[DAY].visible, automatic);
-  assert.deepEqual(model.plans[DAY].manualSelected, expected);
-  C.setPlanMode(model, DAY, 'manual');
-  const copy = C.validateModel(JSON.parse(JSON.stringify(model)));
-  assert.equal(copy.plans[DAY].mode, 'manual');
-  assert.deepEqual(copy.plans[DAY].manualSelected, expected);
-  const before = JSON.stringify(copy.plans[DAY]);
-  assert.deepEqual(C.getPlan(copy, '2026-10-18').manualSelected, []);
-  C.setPlanMode(copy, '2026-10-18', 'manual');
-  assert.equal(JSON.stringify(copy.plans[DAY]), before);
+test('deferral still moves a manually reordered automatic queue item to the end', () => {
+  const m = fixture(); C.setPlanMode(m, DAY, 'manual'); C.moveManualTask(m, DAY, 'p5', 0); C.setPlanMode(m, DAY, 'auto'); C.deferAutomaticTask(m, DAY, 'p5');
+  assert.equal(order(m).at(-1), 'p5'); assert.equal(order(m)[0], 'p0'); C.setPlanMode(m, DAY, 'manual'); assert.equal(order(m).at(-1), 'p5');
 });
-
-test('completion stays in its manual position and removal does not refill the slot', () => {
-  const model = fixture();
-  C.setPlanMode(model, DAY, 'manual');
-  C.setManualTask(model, DAY, 's_proposal', true);
-  C.setManualTask(model, DAY, 't_exercises', true);
-  C.setCompletion(model, 's_proposal', true, '2026-10-17T03:00:00.000Z');
-  C.syncAutoProjects(model, DAY);
-  assert.deepEqual(model.plans[DAY].manualSelected, ['s_proposal', 't_exercises']);
-  assert.throws(() => C.setManualTask(model, DAY, 't_notes', true), /尚未完成/);
-  C.setCompletion(model, 's_proposal', false);
-  assert.deepEqual(model.plans[DAY].manualSelected, ['s_proposal', 't_exercises']);
-  C.setManualTask(model, DAY, 's_proposal', false);
-  C.syncAutoProjects(model, DAY);
-  assert.deepEqual(model.plans[DAY].manualSelected, ['t_exercises']);
-});
-
-test('deleted or split parent leaves are cleaned without picking their children', () => {
-  const model = fixture();
-  C.setPlanMode(model, DAY, 'manual');
-  for (const id of ['p_auto', 't_derivative', 's_proposal']) C.setManualTask(model, DAY, id, true);
-  model.projects.find(p => p.id === 'p_auto').stages.push({
-    id: 's_new', title: '新阶段', priority: null, due: null, done: false, tasks: []
-  });
-  model.projects[0].stages[1].tasks = [];
-  const copy = C.validateModel(model);
-  assert.deepEqual(copy.plans[DAY].manualSelected, ['s_proposal']);
-  C.syncAutoProjects(copy, DAY);
-  assert.deepEqual(copy.plans[DAY].manualSelected, ['s_proposal']);
-});
-
-test('invalid manual imports and reorder commands fail without changing the plan', () => {
-  const model = fixture();
-  C.setManualTask(model, DAY, 't_exercises', true);
-  const before = JSON.stringify(model);
-  for (const position of [-1, 1, 1.5, '0']) assert.throws(() => C.moveManualTask(model, DAY, 't_exercises', position));
-  assert.throws(() => C.moveManualTask(model, DAY, 'missing', 0));
-  assert.throws(() => C.setManualTask(model, DAY, 's_limits', true));
-  assert.throws(() => C.setPlanMode(model, DAY, 'unexpected'));
-  assert.equal(JSON.stringify(model), before);
-  for (const extra of [{ mode: 'unexpected' }, { mode: null }, { manualSelected: 't_exercises' }, { manualSelected: ['t_exercises', 't_derivative', 's_proposal', 'p_auto'] }, { manualSelected: ['../file'] }]) {
-    const invalid = JSON.parse(before);
-    Object.assign(invalid.plans[DAY], extra);
-    assert.throws(() => C.validateModel(invalid));
-  }
+test('shared overrides survive reopening in auto mode until explicitly reset', () => {
+  const m = fixture(); C.setPlanMode(m, DAY, 'manual'); C.moveManualTask(m, DAY, 'p5', 0); C.setPlanMode(m, DAY, 'auto');
+  const copy = C.validateModel(JSON.parse(JSON.stringify(m))); C.syncAutoProjects(copy, DAY); assert.equal(order(copy)[0], 'p5');
+  C.resetAutomaticQueue(copy, DAY); assert.equal(order(copy)[0], 'p0'); assert.deepEqual(C.getPlan(copy, DAY).visible, ['p0', 'p1', 'p2']);
 });

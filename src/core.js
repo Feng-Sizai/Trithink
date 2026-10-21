@@ -292,6 +292,7 @@
       schemaVersion: SCHEMA_VERSION,
       projects: [],
       projectSort: 'priority',
+      viewState: null,
       plans: {},
       routines: {},
       calendarEvents: [],
@@ -440,11 +441,20 @@
   }
   // Deadline boosts apply only to today's automatic queue. Unspecified times
   // mean local midnight at the end of the due date. Overdue items stay urgent.
-  function sortAutomaticTasks(tasks, now = new Date()) {
-    const instant = Number(now);
+  function deadlineRemaining(task, now = new Date()) {
+    return task.due ? new Date(task.due + 'T' + (task.dueTime || '24:00') + ':00').getTime() - Number(now) : Infinity;
+  }
+  function isDeadlineUrgent(task, now = new Date()) {
+    return Boolean(task && !task.done && deadlineRemaining(task, now) < 86400000);
+  }
+  function isTaskUrgent(model, task, now = new Date()) {
+    if (!task || task.done) return false;
+    return isDeadlineUrgent(task, now) || isDeadlineUrgent(model.projects.find(p => p.id === task.projectId), now);
+  }
+  function sortAutomaticTasks(tasks, now = new Date(), urgentIds = new Set()) {
     const ranked = tasks.map(task => {
-      const remaining = task.due ? new Date(task.due + 'T' + (task.dueTime || '24:00') + ':00').getTime() - instant : Infinity;
-      const boost = remaining < 86400000 ? 4 : remaining < 172800000 ? 2.5 : 0;
+      const remaining = deadlineRemaining(task, now);
+      const boost = urgentIds.has(task.id) || remaining < 86400000 ? 4 : remaining < 172800000 ? 2.5 : 0;
       return { task, rank: Math.max(task.priority, boost) };
     });
     return ranked.sort((a, b) => b.rank - a.rank || b.task.priority - a.task.priority || compareDeadlines(a.task, b.task)).map(item => item.task);
@@ -540,15 +550,17 @@
     };
     const plan = model.plans[day];
     if (plan.excludedProjects === undefined) plan.excludedProjects = [];
+    if (plan.deferred === undefined) plan.deferred = plan.excludedProjects.slice();
     if (plan.mode === undefined) plan.mode = 'auto';
     if (plan.manualSelected === undefined) plan.manualSelected = [];
+    if (plan.manualOrder === undefined) plan.manualOrder = [];
     return model.plans[day];
   }
   function setPlanMode(model, date, mode) {
     assert(mode === 'auto' || mode === 'manual', '今日计划模式无效');
     const plan = getPlan(model, date);
     plan.mode = mode;
-    return plan;
+    return syncAutoProjects(model, date);
   }
   function setManualTask(model, date, id, selected) {
     boolean(selected, '手选状态');
@@ -566,37 +578,67 @@
   }
   function moveManualTask(model, date, id, position) {
     const plan = getPlan(model, date);
-    assert(plan.manualSelected.includes(id), '任务不在手选计划中');
-    assert(Number.isInteger(position) && position >= 0 && position < plan.manualSelected.length, '任务位置无效');
-    const reordered = plan.manualSelected.filter(value => value !== id);
+    assert(plan.mode === 'manual', '请切换到手选模式调整顺序');
+    const order = currentQueue(model, date).map(task => task.id);
+    assert(order.includes(id), '事项不在待办队列中');
+    assert(Number.isInteger(position) && position >= 0 && position < order.length, '任务位置无效');
+    const reordered = order.filter(value => value !== id);
     reordered.splice(position, 0, id);
-    plan.manualSelected = reordered;
-    return plan;
+    plan.manualOrder = reordered;
+    return syncAutoProjects(model, date);
   }
-  // Reconcile only the requested day's plan. Finished visible cards remain until
-  // the UI explicitly continues, even when a new automatic project ranks higher.
+  // Keep the entire unfinished pool. Deferrals are a FIFO tail, never hidden.
+  function automaticQueue(model, date, now = new Date()) {
+    const plan = getPlan(model, date);
+    const tasks = flattenTasks(model).filter(task => !task.done);
+    const urgent = new Set(tasks.filter(task => isTaskUrgent(model, task, now)).map(task => task.id));
+    const sorted = sortAutomaticTasks(tasks, now, urgent);
+    const deferred = new Set(plan.deferred);
+    const available = sorted.filter(task => !deferred.has(task.id) || urgent.has(task.id));
+    const byId = new Map(sorted.map(task => [task.id, task]));
+    const tail = plan.deferred.filter(id => byId.has(id) && !urgent.has(id)).map(id => byId.get(id));
+    return available.concat(tail);
+  }
+  function currentQueue(model, date, now = new Date()) {
+    const plan = getPlan(model, date);
+    const sorted = automaticQueue(model, date, now);
+    if (!plan.manualOrder.length) return sorted;
+    const byId = new Map(sorted.map(task => [task.id, task]));
+    const ordered = [...new Set(plan.manualOrder)].filter(id => byId.has(id));
+    const seen = new Set(ordered);
+    return ordered.map(id => byId.get(id)).concat(sorted.filter(task => !seen.has(task.id)));
+  }
+  function deferAutomaticTask(model, date, id, now = new Date()) {
+    const task = flattenTasks(model).find(item => item.id === id);
+    assert(task && !task.done, '只能暂缓未完成的事项');
+    assert(!isTaskUrgent(model, task, now), '截止不足1天，不能暂缓');
+    const plan = getPlan(model, date);
+    assert(plan.mode === 'auto', '请在自动模式中暂缓事项');
+    const sharedOrder = plan.manualOrder.length ? currentQueue(model, date, now).map(task => task.id) : null;
+    plan.deferred = plan.deferred.filter(value => value !== id).concat(id);
+    if (sharedOrder) plan.manualOrder = sharedOrder.filter(value => value !== id).concat(id);
+    return syncAutoProjects(model, date, now);
+  }
+  function resetAutomaticQueue(model, date, now = new Date()) {
+    const plan = getPlan(model, date);
+    plan.deferred = [];
+    plan.excludedProjects = [];
+    plan.manualOrder = [];
+    plan.manualSelected = [];
+    plan.mode = 'auto';
+    return syncAutoProjects(model, date, now);
+  }
   function syncAutoProjects(model, date, now = new Date()) {
     const plan = getPlan(model, date);
     const leaves = flattenTasks(model);
-    const byId = new Map(leaves.map(task => [task.id, task]));
-    // Manual order is independent of the automatic queue, including done cards.
-    plan.manualSelected = [...new Set(plan.manualSelected)].filter(id => byId.has(id)).slice(0, 3);
-    const emptyProjects = leaves.filter(task => task.isProject);
-    const emptyIds = new Set(emptyProjects.map(task => task.id));
-    plan.excludedProjects = [...new Set(plan.excludedProjects)].filter(id => emptyIds.has(id));
-    const excluded = new Set(plan.excludedProjects);
-    plan.selected = [...new Set(plan.selected)].filter(id => byId.has(id) && !excluded.has(id));
-    const selected = new Set(plan.selected);
-    for (const project of emptyProjects) {
-      if (!project.done && !excluded.has(project.id) && !selected.has(project.id)) {
-        plan.selected.push(project.id);
-        selected.add(project.id);
-      }
-    }
-    plan.visible = [...new Set(plan.visible)].filter(id => selected.has(id)).slice(0, 3);
-    if (!plan.visible.some(id => byId.get(id).done)) {
-      plan.visible = sortAutomaticTasks(leaves.filter(task => selected.has(task.id) && !task.done), now).slice(0, 3).map(task => task.id);
-    }
+    const valid = new Set(leaves.map(task => task.id));
+    plan.manualSelected = [...new Set(plan.manualSelected)].filter(id => valid.has(id)).slice(0, 3);
+    plan.deferred = [...new Set(plan.deferred)].filter(id => valid.has(id));
+    plan.excludedProjects = plan.excludedProjects.filter(id => leaves.some(task => task.id === id && task.isProject));
+    const queue = currentQueue(model, date, now);
+    if (plan.manualOrder.length) plan.manualOrder = queue.map(task => task.id);
+    plan.visible = queue.slice(0, 3).map(task => task.id);
+    plan.selected = plan.visible.slice();
     return plan;
   }
   function getRoutine(model, date) {
@@ -607,7 +649,8 @@
       drinks: {
         coffee: 0,
         milkTea: 0,
-        other: 0
+        other: 0,
+        water: 0
       }
     };
     return model.routines[day];
@@ -619,6 +662,35 @@
     record(raw, '文件');
     assert(raw.schemaVersion === SCHEMA_VERSION, '不支持的数据版本，请使用此试用版导出的文件');
     const output = blankModel();
+    if (raw.backupMeta != null) {
+      const meta = record(raw.backupMeta, '保存信息');
+      assert(Number.isSafeInteger(meta.revision) && meta.revision > 0, '保存序号无效');
+      output.backupMeta = { revision: meta.revision, savedAt: notebookTime(meta.savedAt) };
+    }
+    if (raw.formDraft != null) {
+      const draft = record(raw.formDraft, '表单草稿');
+      assert(['save-item', 'calendar-save-event'].includes(draft.action), '草稿类型无效');
+      const context = record(draft.context, '草稿位置');
+      const cleanContext = {};
+      if (draft.action === 'save-item') {
+        assert(['project', 'stage', 'task'].includes(context.kind), '草稿事项类型无效');
+        cleanContext.kind = context.kind;
+      }
+      for (const key of ['id', 'projectId', 'stageId']) {
+        const value = context[key] ?? null;
+        assert(value === null || typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value), '草稿事项编号无效');
+        cleanContext[key] = value;
+      }
+      const values = record(draft.values, '草稿内容');
+      const fields = draft.action === 'save-item' ? ['title', 'priority', 'due', 'dueTime'] : ['title', 'date', 'priority', 'startTime', 'endTime', 'endOfDay', 'location', 'color'];
+      const cleanValues = {};
+      for (const key of fields) {
+        const value = values[key] ?? '';
+        assert(typeof value === 'string' && value.length <= (['title', 'location'].includes(key) ? 200 : 20) && !/[\u0000-\u001F]/.test(value), '草稿内容无效');
+        cleanValues[key] = value;
+      }
+      output.formDraft = { action: draft.action, context: cleanContext, values: cleanValues, savedAt: notebookTime(draft.savedAt) };
+    }
     output.projectSort = raw.projectSort === undefined ? 'priority' : raw.projectSort;
     assert(['priority', 'due'].includes(output.projectSort), '项目排序方式无效');
     const ids = new Set();
@@ -695,15 +767,19 @@
       const selectedIds = new Set(selected);
       const visible = planIds(plan.visible, 3).filter(value => selectedIds.has(value));
       const excludedProjects = planIds(plan.excludedProjects === undefined ? [] : plan.excludedProjects, LIMITS.projects).filter(value => emptyProjectIds.has(value));
+      const deferred = planIds(plan.deferred === undefined ? excludedProjects : plan.deferred, LIMITS.tasks + LIMITS.stages + LIMITS.projects);
       const mode = plan.mode === undefined ? 'auto' : plan.mode;
       assert(mode === 'auto' || mode === 'manual', '今日计划模式无效');
       const manualSelected = planIds(plan.manualSelected === undefined ? [] : plan.manualSelected, 3);
+      const manualOrder = planIds(plan.manualOrder === undefined ? [] : plan.manualOrder, LIMITS.tasks + LIMITS.stages + LIMITS.projects);
       output.plans[date] = {
         selected,
         visible,
         excludedProjects,
+        deferred,
         mode,
-        manualSelected
+        manualSelected,
+        manualOrder
       };
     }
     record(raw.routines, '今日作息');
@@ -715,9 +791,10 @@
       assert(typeof routine.sleepTime === 'string' && (routine.sleepTime === '' || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(routine.sleepTime)), '计划入睡时间无效');
       const drinks = record(routine.drinks, '饮品记录');
       const counts = {};
-      for (const type of ['coffee', 'milkTea', 'other']) {
-        assert(Number.isInteger(drinks[type]) && drinks[type] >= 0 && drinks[type] <= 10000, '饮品杯数无效');
-        counts[type] = drinks[type];
+      for (const type of ['coffee', 'milkTea', 'other', 'water']) {
+        const count = type === 'water' && drinks[type] === undefined ? 0 : drinks[type];
+        assert(Number.isInteger(count) && count >= 0 && count <= 10000, '饮品杯数无效');
+        counts[type] = count;
       }
       output.routines[date] = {
         sleepTime: routine.sleepTime,
@@ -780,6 +857,15 @@
         updatedAt
       };
     });
+    if (raw.viewState != null) {
+      const view = record(raw.viewState, '界面状态');
+      assert(['today', 'projects', 'detail', 'all', 'routine', 'calendar', 'notebook', 'note-history'].includes(view.page), '界面页面无效');
+      assert(view.activeProject === null || typeof view.activeProject === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(view.activeProject), '界面项目编号无效');
+      assert(isDate(view.calendarDay) && isDate(view.calendarMonth + '-01'), '界面日期无效');
+      boolean(view.showQueue, '队列展开状态'); boolean(view.showDone, '完成列表状态');
+      assert(Number.isInteger(view.scrollY) && view.scrollY >= 0 && view.scrollY <= 10000000, '界面滚动位置无效');
+      output.viewState = { page: view.page, activeProject: view.activeProject, calendarDay: view.calendarDay, calendarMonth: view.calendarMonth, showQueue: view.showQueue, showDone: view.showDone, scrollY: view.scrollY };
+    }
     return output;
   }
 
@@ -803,6 +889,13 @@
     flattenTasks,
     sortTasks,
     sortAutomaticTasks,
+    deadlineRemaining,
+    isDeadlineUrgent,
+    isTaskUrgent,
+    automaticQueue,
+    currentQueue,
+    resetAutomaticQueue,
+    deferAutomaticTask,
     effectiveDeadline,
     compareDeadlines,
     projectLeadTask,

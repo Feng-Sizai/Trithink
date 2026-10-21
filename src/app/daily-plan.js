@@ -5,31 +5,20 @@ function manualMode() {
   return plan().mode === 'manual';
 }
 function planModeSwitch() {
-  return `<div class="plan-tools"><div class="plan-mode-switch" role="group" aria-label="今日计划模式"><button type="button" data-action="set-plan-mode" data-mode="auto" aria-pressed="${!manualMode()}">自动模式</button><button type="button" data-action="set-plan-mode" data-mode="manual" aria-pressed="${manualMode()}">手选模式</button></div><span class="muted small">${manualMode() ? '自己选三项，自己排顺序' : '按优先顺序展示前三项'}</span></div>`;
+  return `<div class="plan-tools"><div class="plan-mode-switch" role="group" aria-label="今日计划模式"><button type="button" data-action="set-plan-mode" data-mode="auto" aria-pressed="${!manualMode()}">自动模式</button><button type="button" data-action="set-plan-mode" data-mode="manual" aria-pressed="${manualMode()}">手选模式</button></div><span class="muted small">${manualMode() ? '同一队列，手动调整顺序' : plan().manualOrder.length ? '手选顺序已同步' : '从全部待办自动补足三项'}</span>${manualMode() ? '' : '<button type="button" class="secondary" data-action="reset-default-queue">恢复默认</button>'}</div>`;
 }
 function manualSelectionSummary() {
-  const count = plan().manualSelected.length;
-  const picked = plan().manualSelected.map(findLeaf).filter(Boolean).map((task, i) => `<button type="button" class="manual-picked-task" data-action="manual-remove" data-id="${task.id}" aria-label="移出手选：${esc(task.title)}" title="${esc(task.title)}"><span>${i + 1}. ${esc(task.title)}${task.done ? '（已完成）' : ''}</span><span aria-hidden="true">×</span></button>`).join('');
-  return `<section class="manual-selection-summary" aria-label="手选任务"><strong>手选模式 · 已选 ${count} / 3 项</strong><button type="button" class="secondary" data-page="today">返回今日计划</button><p>${count >= 3 ? '已选满三项。先移出一项，即可选择其他任务。' : '选择最多三项任务，返回今日计划后可拖拽调整顺序。'}</p>${picked ? `<div class="manual-picked-items">${picked}</div>` : ''}</section>`;
+  return '<section class="manual-selection-summary"><strong>同一待办池 · 手动排序</strong><p>所有未完成事项都已在队列中，返回今日计划即可调整顺序。</p><button type="button" class="secondary" data-page="today">返回今日计划调整顺序</button></section>';
 }
 function changePlanMode(mode) {
   if (mode === plan().mode) return;
   try {
     C.setPlanMode(model, today, mode);
     showQueue = false;
-    if (save(mode === 'manual' ? '已切换手选模式，请选择今天的任务。' : '已恢复自动优先排序。').ok) {
+    if (save(mode === 'manual' ? '已切换为手动调整当前队列。' : '已切换自动模式，保留当前队列顺序。').ok) {
       render();
       $(`[data-action="set-plan-mode"][data-mode="${mode}"]`)?.focus({ preventScroll: true });
     }
-  } catch (error) {
-    toast(error.message, true);
-  }
-}
-function changeManualTask(id, selected) {
-  if (!manualMode()) return;
-  try {
-    C.setManualTask(model, today, id, selected);
-    if (save(selected ? '已加入手选任务。' : '已移出手选，任务仍保留在列表中。').ok) render();
   } catch (error) {
     toast(error.message, true);
   }
@@ -78,10 +67,10 @@ main.addEventListener('drop', event => {
   event.preventDefault();
   const card = event.target.closest('.manual-card');
   const id = draggedTaskId;
-  const position = card ? plan().manualSelected.indexOf(card.dataset.cardId) : -1;
+  const position = card ? pendingToday().map(t => t.id).indexOf(card.dataset.cardId) : -1;
   const internal = event.dataTransfer.getData('text/plain') === id;
   clearPlanDrag();
-  if (internal && position >= 0 && plan().manualSelected.indexOf(id) !== position) reorderManualTask(id, position);
+  if (internal && position >= 0 && pendingToday().map(t => t.id).indexOf(id) !== position) reorderManualTask(id, position);
 });
 main.addEventListener('dragend', clearPlanDrag);
 main.addEventListener('keydown', event => {
@@ -89,6 +78,21 @@ main.addEventListener('keydown', event => {
   if (!handle || !manualMode() || page !== 'today' || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
   event.preventDefault();
   const id = handle.dataset.dragId;
-  const position = plan().manualSelected.indexOf(id) + (event.key === 'ArrowUp' ? -1 : 1);
-  if (position >= 0 && position < plan().manualSelected.length) reorderManualTask(id, position);
+  const position = pendingToday().map(t => t.id).indexOf(id) + (event.key === 'ArrowUp' ? -1 : 1);
+  if (position >= 0 && position < pendingToday().length) reorderManualTask(id, position);
 });
+
+function deferToday(id) {
+  try {
+    C.deferAutomaticTask(model, today, id);
+    if (save('已移到队尾，明天恢复参与排序。').ok) render();
+  } catch (error) {
+    render();
+    toast(error.message, true);
+  }
+}
+
+function resetDefaultQueue() {
+  C.resetAutomaticQueue(model, today);
+  if (save('已清空今天的暂缓标记和手动排序，按默认规则重新排列。').ok) render();
+}
