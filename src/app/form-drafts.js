@@ -7,7 +7,12 @@ function draftAction(action) {
 }
 function formValues() {
   const values = {};
-  for (const input of modal.querySelectorAll('input[name],select[name]')) values[input.name] = input.type === 'checkbox' ? input.checked ? 'true' : '' : input.value;
+  for (const input of modal.querySelectorAll('input[name],select[name]')) {
+    if (input.name === 'categoryIds') {
+      if (!values.categoryIds) values.categoryIds = [];
+      if (input.checked) values.categoryIds.push(input.value);
+    } else values[input.name] = input.type === 'checkbox' ? input.checked ? 'true' : '' : input.value;
+  }
   return values;
 }
 function draftIdentity(action, context) {
@@ -36,6 +41,10 @@ function applyFormDraft() {
   const draft = model.formDraft;
   if (!draft || draftIdentity(draft.action, draft.context) !== draftIdentity(modalAction, modalContext)) return;
   for (const [name, value] of Object.entries(draft.values)) {
+    if (name === 'categoryIds') {
+      for (const input of modal.querySelectorAll('[name="categoryIds"]')) input.checked = value.includes(input.value);
+      continue;
+    }
     const input = modal.querySelector('[name="' + name + '"]');
     if (!input) continue;
     if (input.type === 'checkbox') input.checked = value === 'true';else input.value = value;

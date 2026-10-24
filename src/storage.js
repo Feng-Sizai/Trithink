@@ -6,7 +6,8 @@
   if (!Core) throw new Error('请先加载 core.js');
 
   // Persistent keys remain stable across compatible model extensions.
-  const MAIN_KEY = root.document?.body?.dataset.preview === 'calendar' ? 'three-things-calendar-preview:v1' : 'three-things-trial:v1';
+  const previewKind = root.document?.body?.dataset.preview;
+  const MAIN_KEY = previewKind === 'categories' ? 'three-things-categories-preview:v1' : previewKind === 'calendar' ? 'three-things-calendar-preview:v1' : 'three-things-trial:v1';
   const BACKUP_KEY = MAIN_KEY + ':backup';
   let memoryModel = null;
   let memoryJSON = null;
@@ -153,7 +154,7 @@
     }
   }
 
-  const desktop = root.document?.body?.dataset.preview !== 'calendar' ? root.ThreeThingsDesktop : null;
+  const desktop = !previewKind ? root.ThreeThingsDesktop : null;
   function load(defaultFactory) {
     if (!desktop) return loadBrowser(defaultFactory);
     try {

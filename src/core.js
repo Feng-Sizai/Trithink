@@ -6,6 +6,7 @@
   const SCHEMA_VERSION = 1;
   const LIMITS = Object.freeze({
     projects: 100,
+    categories: 100,
     stages: 10000,
     tasks: 10000,
     title: 200,
@@ -291,6 +292,7 @@
     return {
       schemaVersion: SCHEMA_VERSION,
       projects: [],
+      categories: [],
       projectSort: 'priority',
       viewState: null,
       plans: {},
@@ -371,6 +373,56 @@
       excludedProjects: []
     };
     return model;
+  }
+
+  // Categories reference projects; they never copy projects or their progress.
+  function categoryTitle(model, value, exceptId) {
+    const name = title(value, '分类名称');
+    assert(!['未分类', '全部项目'].includes(name), '这是内置分类名称，请使用其他名称');
+    assert(!(model.categories || []).some(item => item.id !== exceptId && item.title === name), '已有同名分类，请换一个名称');
+    return name;
+  }
+  function createCategory(model, value) {
+    const name = categoryTitle(model, value);
+    assert((model.categories || []).length < LIMITS.categories, '分类数量超出限制');
+    const category = { id: newId('c'), title: name };
+    if (!model.categories) model.categories = [];
+    model.categories.push(category);
+    return category;
+  }
+  function renameCategory(model, categoryId, value) {
+    const category = (model.categories || []).find(item => item.id === categoryId);
+    assert(category, '分类不存在');
+    category.title = categoryTitle(model, value, categoryId);
+  }
+  function categoryMemberships(model, values) {
+    const valid = new Set((model.categories || []).map(item => item.id));
+    const seen = new Set();
+    return list(values, LIMITS.categories, '项目所属分类').map(value => {
+      assert(typeof value === 'string' && valid.has(value), '项目所属分类不存在');
+      assert(!seen.has(value), '项目所属分类重复');
+      seen.add(value);
+      return value;
+    });
+  }
+  function setProjectCategories(model, projectId, categoryIds) {
+    const project = model.projects.find(item => item.id === projectId);
+    assert(project, '项目不存在');
+    const memberships = categoryMemberships(model, categoryIds);
+    project.categoryIds = memberships;
+  }
+  function deleteCategory(model, categoryId) {
+    assert((model.categories || []).some(item => item.id === categoryId), '分类不存在');
+    model.categories = model.categories.filter(item => item.id !== categoryId);
+    for (const project of model.projects) {
+      project.categoryIds = (project.categoryIds || []).filter(id => id !== categoryId);
+    }
+    if (model.formDraft?.values.categoryIds) model.formDraft.values.categoryIds = model.formDraft.values.categoryIds.filter(id => id !== categoryId);
+  }
+  function projectsInCategory(model, categoryId = 'all') {
+    return model.projects.filter(project => !project.done && (categoryId === 'all' ||
+      categoryId === 'unclassified' && !(project.categoryIds || []).length ||
+      (project.categoryIds || []).includes(categoryId)));
   }
 
   // Actionable leaves and the shared priority comparator used by task views.
@@ -689,6 +741,14 @@
         assert(typeof value === 'string' && value.length <= (['title', 'location'].includes(key) ? 200 : 20) && !/[\u0000-\u001F]/.test(value), '草稿内容无效');
         cleanValues[key] = value;
       }
+      if (draft.action === 'save-item' && cleanContext.kind === 'project' && values.categoryIds !== undefined) {
+        const seen = new Set();
+        cleanValues.categoryIds = list(values.categoryIds, LIMITS.categories, '草稿分类').map(value => {
+          assert(typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value) && !seen.has(value), '草稿分类编号无效');
+          seen.add(value);
+          return value;
+        });
+      }
       output.formDraft = { action: draft.action, context: cleanContext, values: cleanValues, savedAt: notebookTime(draft.savedAt) };
     }
     output.projectSort = raw.projectSort === undefined ? 'priority' : raw.projectSort;
@@ -703,12 +763,23 @@
       ids.add(value);
       return value;
     };
+    const categoryNames = new Set(['未分类', '全部项目']);
+    output.categories = list(raw.categories === undefined ? [] : raw.categories, LIMITS.categories, '项目分类').map(category => {
+      record(category, '项目分类');
+      assert(!['all', 'unclassified'].includes(category.id), '分类编号不能使用保留名称');
+      const name = title(category.title, '分类名称');
+      assert(!categoryNames.has(name), '分类名称重复');
+      categoryNames.add(name);
+      return { id: id(category.id), title: name };
+    });
+    if (output.formDraft?.values.categoryIds) output.formDraft.values.categoryIds = categoryMemberships(output, output.formDraft.values.categoryIds);
     output.projects = list(raw.projects, LIMITS.projects, '项目').map(project => {
       record(project, '项目');
       const projectDone = project.done === undefined ? false : boolean(project.done, '项目完成状态');
       return {
         id: id(project.id),
         title: title(project.title, '项目标题'),
+        categoryIds: categoryMemberships(output, project.categoryIds === undefined ? [] : project.categoryIds),
         priority: priority(project.priority, false, '项目星级', 0),
         ...(project.importance === undefined ? {} : { importance: priority(project.importance, false, '历史重要程度') }),
         due: deadline(project.due === undefined ? null : project.due),
@@ -865,6 +936,16 @@
       boolean(view.showQueue, '队列展开状态'); boolean(view.showDone, '完成列表状态');
       assert(Number.isInteger(view.scrollY) && view.scrollY >= 0 && view.scrollY <= 10000000, '界面滚动位置无效');
       output.viewState = { page: view.page, activeProject: view.activeProject, calendarDay: view.calendarDay, calendarMonth: view.calendarMonth, showQueue: view.showQueue, showDone: view.showDone, scrollY: view.scrollY };
+      const validCategories = new Set(['all', 'unclassified', ...output.categories.map(category => category.id)]);
+      if (view.categoryId !== undefined) {
+        assert(typeof view.categoryId === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(view.categoryId), '界面分类编号无效');
+        output.viewState.categoryId = validCategories.has(view.categoryId) ? view.categoryId : 'all';
+      }
+      if (view.expandedCategories !== undefined) {
+        const expanded = list(view.expandedCategories, LIMITS.categories + 1, '分类展开状态');
+        assert(expanded.every(value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value)), '分类展开编号无效');
+        output.viewState.expandedCategories = [...new Set(expanded)].filter(value => value !== 'all' && validCategories.has(value));
+      }
     }
     return output;
   }
@@ -875,6 +956,11 @@
     LIMITS,
     blankModel,
     sampleModel,
+    createCategory,
+    renameCategory,
+    deleteCategory,
+    setProjectCategories,
+    projectsInCategory,
     validateModel,
     newId,
     localDate,

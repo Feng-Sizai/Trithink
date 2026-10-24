@@ -100,7 +100,9 @@ function editForm(kind, id) {
   }
   if (redirectToPendingDraft('save-item', context)) return;
   const deadlineField = `<fieldset class="deadline-fields field wide"><legend>截止时间</legend><div class="deadline-inputs"><input aria-label="截止日期（选填）" type="date" name="due" value="${item.due || ''}"><input aria-label="截止时刻（选填）" type="time" name="dueTime" value="${item.dueTime || ''}"></div><span class="muted small">${kind === 'project' ? '日期可不填；' : '日期留空沿用上一级；'}时刻留空默认为当天 24:00，默认时刻不显示</span></fieldset>`;
-  const fields = `<div class="form-grid"><label class="field wide">${kind === 'project' ? '项目标题' : kind === 'stage' ? '子阶段名称' : '小任务名称'}<input name="title" value="${esc(item.title)}" maxlength="200" required autocomplete="off"></label><label class="field">重要程度<select name="priority">${priorityOptions(item.priority, kind !== 'project')}</select></label>${deadlineField}</div>${id ? `<button type="button" class="danger text-button" data-action="delete-item" data-kind="${kind}" data-id="${id}">删除${kind === 'project' ? '项目' : kind === 'stage' ? '子阶段' : '小任务'}</button>` : ''}`;
+  const selectedCategories = kind === 'project' ? id ? item.categoryIds || [] : model.categories.some(category => category.id === activeCategory) ? [activeCategory] : [] : [];
+  const categoryFields = kind === 'project' ? categoryCheckboxes(selectedCategories) : '';
+  const fields = `<div class="form-grid"><label class="field wide">${kind === 'project' ? '项目标题' : kind === 'stage' ? '子阶段名称' : '小任务名称'}<input name="title" value="${esc(item.title)}" maxlength="200" required autocomplete="off"></label><label class="field">重要程度<select name="priority">${priorityOptions(item.priority, kind !== 'project')}</select></label>${deadlineField}</div>${categoryFields}${id ? `<button type="button" class="danger text-button" data-action="delete-item" data-kind="${kind}" data-id="${id}">删除${kind === 'project' ? '项目' : kind === 'stage' ? '子阶段' : '小任务'}</button>` : ''}`;
   openModal(title, fields, 'save-item', context);
 }
 function addTask(stageId) {

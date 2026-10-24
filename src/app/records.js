@@ -105,13 +105,14 @@ function save(message, { recordUndo = true } = {}) {
   return result;
 }
 function updateSidebar() {
+  renderCategoryTree();
   const r = routine();
   $('#sidebar-status').innerHTML = `<div>已完成 <strong>${C.completedCount(model)}</strong> 项任务</div><div>计划入睡：<strong>${r.sleepTime || '未设置'}</strong></div><div aria-label="饮品摄入：咖啡${r.drinks.coffee}杯，奶茶${r.drinks.milkTea}杯，其他${r.drinks.other}杯，喝水${r.drinks.water || 0}杯">咖啡${r.drinks.coffee}·奶茶${r.drinks.milkTea}·其他${r.drinks.other}杯 · 喝水${r.drinks.water || 0}杯</div>`;
 }
 
 function captureViewState() {
   if (typeof page !== 'string' || typeof restoringView !== 'undefined' && restoringView) return;
-  model.viewState = { page, activeProject, calendarMonth, calendarDay, showQueue, showDone, scrollY: Math.max(0, Math.min(10000000, Math.round(window.scrollY))) };
+  model.viewState = { page, activeProject, calendarMonth, calendarDay, showQueue, showDone, categoryId: activeCategory, expandedCategories: [...expandedCategories], scrollY: Math.max(0, Math.min(10000000, Math.round(window.scrollY))) };
 }
 function persistViewState() {
   if (boot || restoringView) return;

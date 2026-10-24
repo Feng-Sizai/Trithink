@@ -15,7 +15,10 @@
       <div class="brand"><span class="brand-logo" aria-hidden="true">三</span><div class="brand-text">三件事<small>把事情拆小，<br>一件件完成</small></div></div>
       <nav class="navigation" aria-label="主要页面">
         <button type="button" data-page="today" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>今日计划</button>
-        <button type="button" data-page="projects"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path></svg>我的项目</button>
+        <div class="projects-navigation">
+          <button type="button" data-page="projects" id="projects-navigation-toggle" aria-expanded="false" aria-controls="project-category-tree"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path></svg><span>我的项目</span><span class="projects-tree-indicator" aria-hidden="true">⌄</span></button>
+          <div id="project-category-tree" class="project-category-tree" aria-label="项目分类" hidden></div>
+        </div>
         <button type="button" data-page="calendar"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M7 2v6m10-6v6M3 11h18m-13 4h1m3 0h1m3 0h1m-9 3h1m3 0h1"></path></svg>日历</button>
         <div class="navigation-more" id="navigation-more">
           <button type="button" id="other-features-toggle" aria-expanded="false" aria-controls="other-features-popover"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg>其他功能</button>
