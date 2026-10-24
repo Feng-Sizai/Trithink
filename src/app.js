@@ -24,6 +24,7 @@ document.addEventListener('click', event => {
     boot = false;
     page = button.dataset.page;
     if (page === 'calendar') calendarView = 'week';
+    if (page === 'projects') activeCategory = 'all';
     showQueue = false;
     render();
     if (fromOtherFeatures) main.focus({ preventScroll: true });
@@ -33,6 +34,7 @@ document.addEventListener('click', event => {
     id = button.dataset.id;
   if (!action) return;
   if (action === 'open-tutorial') { openTutorial(); return; }
+  if (categoryClick(button)) return;
   if (calendarClick(button)) return;
   if (action === 'set-plan-mode') changePlanMode(button.dataset.mode);
   if (action === 'choose-today') {
@@ -172,6 +174,7 @@ document.addEventListener('submit', event => {
     context = modalContext;
   if (!action) return;
   try {
+    if (categorySubmit(action, context, data)) return;
     tutorialValidate(action, context, data);
     let createdId = null;
     if (calendarSubmit(action, context, data)) return;
@@ -184,8 +187,10 @@ document.addEventListener('submit', event => {
       if (dueTime && !due) throw new Error('请先选择截止日期，再设置具体时刻。');
       if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) throw new Error('请选择有效的截止日期。');
       if (context.kind === 'project') {
+        const categoryIds = data.getAll('categoryIds');
         if (context.id) Object.assign(projectById(context.id), {
           title,
+          categoryIds,
           priority,
           due,
           dueTime
@@ -193,6 +198,7 @@ document.addEventListener('submit', event => {
           const p = {
             id: C.newId('p'),
             title,
+            categoryIds,
             priority,
             due,
             dueTime,
@@ -414,5 +420,5 @@ document.addEventListener('keydown', event => {
   event.preventDefault();
   manualBackupCurrent();
 });
-if (calendarPreview && loaded.isNew) save();
+if ((calendarPreview || categoryPreview) && loaded.isNew) save();
 if (loaded.recovered) toast('已恢复有效备份，来源和保存时间已显示在页面顶部。');else if (loaded.error) toast(loaded.error, true);

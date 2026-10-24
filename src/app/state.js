@@ -4,6 +4,7 @@
 const C = window.ThreeThingsCore;
 const K = window.ThreeThingsCalendar;
 const calendarPreview = document.body.dataset.preview === 'calendar';
+const categoryPreview = document.body.dataset.preview === 'categories';
 const services = window.ThreeThingsIntegrations.createIntegrationServices({
   storage: window.ThreeThingsStorage,
   accounts: null,
@@ -18,10 +19,14 @@ const loaded = S.load();
 let model = loaded.model || C.blankModel();
 let today = C.localDate();
 if (calendarPreview && loaded.isNew) model = K.sampleModel(today);
+if (categoryPreview && loaded.isNew) model = window.ThreeThingsCategoryPreview.sampleModel(today);
 let recoveryNoticeVisible = Boolean(loaded.recovered);
 const previousView = model.viewState;
 let restoringView = true;
-let page = calendarPreview ? 'calendar' : previousView?.page || 'today';
+let page = categoryPreview && loaded.isNew ? 'projects' : calendarPreview ? 'calendar' : previousView?.page || 'today';
+let activeCategory = previousView?.categoryId || 'all';
+let projectTreeOpen = categoryPreview;
+const expandedCategories = new Set(previousView?.expandedCategories || []);
 let calendarMonth = previousView?.calendarMonth || today.slice(0, 7);
 let calendarDay = previousView?.calendarDay || today;
 let calendarView = 'week';
@@ -35,7 +40,7 @@ let memoryOnly = !loaded.persistent;
 let lastGood = C.validateModel(model);
 let showQueue = previousView?.showQueue || false;
 let showDone = previousView?.showDone || false;
-let boot = Boolean(loaded.isNew) && !calendarPreview;
+let boot = Boolean(loaded.isNew) && !calendarPreview && !categoryPreview;
 const labels = ['低', '中', '高'];
 const priorityLabels = ['日常', '普通', '重要', '极重要'];
 let automaticOrder = '';

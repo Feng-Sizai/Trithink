@@ -17,7 +17,7 @@ function harness() {
     const $=name=>nodes[name]||(nodes[name]={innerHTML:''});
     const flat=()=>C.flattenTasks(model),routine=()=>C.getRoutine(model,today);
     const S={save:raw=>{if(blocked)return{ok:false,persistent:false,error:'disk blocked'};persistedJSON=JSON.stringify(raw);return{ok:true,persistent:true}}};
-    const render=()=>renderCount++,destroyEditor=()=>true,cancelScheduleGesture=()=>{scheduleGesture=null},closeScheduleMenu=()=>{},captureNotebook=()=>true;
+    const render=()=>renderCount++,renderCategoryTree=()=>{},destroyEditor=()=>true,cancelScheduleGesture=()=>{scheduleGesture=null},closeScheduleMenu=()=>{},captureNotebook=()=>true;
     let lastToast='';
   `, context);
   for (const file of ['records.js', 'undo.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/app', file), 'utf8'), context);

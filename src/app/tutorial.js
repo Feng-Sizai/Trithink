@@ -1,6 +1,6 @@
 /* A contextual coach: progress follows successful user actions, never sample-data injection. */
 const tutorialPanel = $('#tutorial');
-const tutorialPreferenceKey = calendarPreview ? 'three-things-calendar-preview:tutorial:v2' : 'three-things-trial:tutorial:v2';
+const tutorialPreferenceKey = categoryPreview ? 'three-things-categories-preview:tutorial:v2' : calendarPreview ? 'three-things-calendar-preview:tutorial:v2' : 'three-things-trial:tutorial:v2';
 const tutorialProjectTitle = '学习使用三件事';
 let tutorialState = { status: 'intro', step: 0 };
 try {
@@ -285,7 +285,7 @@ function pauseTutorial(done = false) {
   toast(done ? '练习完成。可从“左下角“？” → 使用帮助”重新练习。' : '教程已暂停，可从“左下角“？” → 使用帮助”继续。');
 }
 function maybeStartTutorial() {
-  if (calendarPreview || tutorialVisible) return;
+  if (calendarPreview || categoryPreview || tutorialVisible) return;
   if (tutorialState.status === 'active' || tutorialState.status === 'intro' && !modal.open) openTutorial();
 }
 tutorialPanel.addEventListener('click', event => {
