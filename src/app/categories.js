@@ -5,7 +5,9 @@ function selectedCategoryName() {
 }
 function renderCategoryTree() {
   if (!['all', 'unclassified'].includes(activeCategory) && !model.categories.some(item => item.id === activeCategory)) activeCategory = 'all';
-  projectTreeOpen = !boot && ['projects', 'detail'].includes(page);
+  const visibleOnPage = !boot && ['projects', 'detail'].includes(page);
+  if (!visibleOnPage) projectTreeCollapsed = false;
+  projectTreeOpen = visibleOnPage && !projectTreeCollapsed;
   const tree = $('#project-category-tree');
   tree.hidden = !projectTreeOpen;
   $('#projects-navigation-toggle').setAttribute('aria-expanded', String(projectTreeOpen));

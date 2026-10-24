@@ -26,6 +26,7 @@ let restoringView = true;
 let page = categoryPreview && loaded.isNew ? 'projects' : calendarPreview ? 'calendar' : previousView?.page || 'today';
 let activeCategory = previousView?.categoryId || 'all';
 let projectTreeOpen = categoryPreview;
+let projectTreeCollapsed = false;
 const expandedCategories = new Set(previousView?.expandedCategories || []);
 let calendarMonth = previousView?.calendarMonth || today.slice(0, 7);
 let calendarDay = previousView?.calendarDay || today;

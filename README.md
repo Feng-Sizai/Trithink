@@ -1,8 +1,8 @@
 # Trithink · 三件事
 
-离线个人日程与项目管理软件，当前版本 **0.6.0**。
+离线个人日程与项目管理软件，当前版本 **0.6.1**。
 
-[下载 0.6.0](https://github.com/Feng-Sizai/Trithink/releases/tag/v0.6.0) · [使用说明](使用说明.md) · [Windows 安装说明](安装与使用说明.md) · [更新记录](更新记录.md)
+[下载 0.6.1](https://github.com/Feng-Sizai/Trithink/releases/tag/v0.6.1) · [使用说明](使用说明.md) · [Windows 安装说明](安装与使用说明.md) · [更新记录](更新记录.md)
 
 ## 功能
 
