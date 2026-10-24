@@ -16,11 +16,17 @@ document.addEventListener('click', event => {
   }
   if (button.disabled) return;
   if (button.dataset.page) {
+    if (button.dataset.page === 'projects' && page === 'projects' && !boot) {
+      projectTreeCollapsed = !projectTreeCollapsed;
+      renderCategoryTree();
+      return;
+    }
     if (!captureNotebook()) return;
     const result = save(undefined, { recordUndo: Boolean(editor) });
     if (!result.ok) return;
     const fromOtherFeatures = otherFeaturesPopover.contains(button);
     closeOtherFeatures();
+    projectTreeCollapsed = false;
     boot = false;
     page = button.dataset.page;
     if (page === 'calendar') calendarView = 'week';

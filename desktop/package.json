@@ -1,7 +1,7 @@
 {
   "name": "three-things-desktop",
   "productName": "三件事",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "三件事：本地项目管理、速写与作息记录",
   "main": "main.cjs",
